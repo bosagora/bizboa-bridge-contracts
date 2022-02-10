@@ -22,7 +22,6 @@ jobs:
 
       - name: npm install, build, and test
         run: |
-          git submodule update --init
           npm ci
           npx hardhat compile
           npx hardhat test
