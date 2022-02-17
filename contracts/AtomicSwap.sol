@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./ManagerAccessControl.sol";
 
 contract AtomicSwap is ManagerAccessControl {
@@ -212,7 +213,7 @@ contract AtomicSwap is ManagerAccessControl {
         require(withdrawBoxStates[_boxID] == States.INVALID);
         // Transfer value from the ERC20 trader to this contract.
         IERC20 token = IERC20(swapTokenAddress);
-        require(_amount <= token.balanceOf(address(this)), "ERC20: insufficient liquidity");
+        require(_amount <= token.balanceOf(address(this)), "insufficient liquidity");
 
         // Store the details of the box.
         WithdrawLockBox memory box = WithdrawLockBox({
@@ -235,7 +236,7 @@ contract AtomicSwap is ManagerAccessControl {
     {
         WithdrawLockBox memory box = withdrawBoxes[_boxID];
         IERC20 token = IERC20(swapTokenAddress);
-        require(box.amount <= token.balanceOf(address(this)), "ERC20: insufficient liquidity");
+        require(box.amount <= token.balanceOf(address(this)), "insufficient liquidity");
 
         // Close the box.
         withdrawBoxes[_boxID].secretKey = _secretKey;
@@ -288,5 +289,46 @@ contract AtomicSwap is ManagerAccessControl {
     {
         WithdrawLockBox memory box = withdrawBoxes[_boxID];
         return box.secretKey;
+    }
+
+    mapping(address => uint256) public liquidBalance;
+
+    event IncreasedLiquidity(address provider, uint256 amount);
+    event DecreasedLiquidity(address provider, uint256 amount);
+
+    function increaseLiquidity(address _provider, uint256 _amount) public {
+        require(_amount > 0, "amount cannot be 0");
+
+        IERC20 token = IERC20(swapTokenAddress);
+
+        token.transferFrom(_provider, address(this), _amount);
+
+        uint256 liquid = liquidBalance[_provider];
+
+        liquid = SafeMath.add(liquid, _amount);
+
+        liquidBalance[_provider] = liquid;
+
+        emit IncreasedLiquidity(_provider, _amount);
+    }
+
+    function decreaseLiquidity(address _provider, uint256 _amount) public {
+        require(_amount > 0, "amount cannot be 0");
+
+        uint256 liquid = liquidBalance[_provider];
+
+        require(_amount <= liquid, "insufficient liquidity balance");
+
+        IERC20 token = IERC20(swapTokenAddress);
+
+        require(_amount <= token.balanceOf(address(this)), "insufficient liquidity");
+
+        token.transfer(_provider, _amount);
+
+        liquid = SafeMath.sub(liquid, _amount);
+
+        liquidBalance[_provider] = liquid;
+
+        emit DecreasedLiquidity(_provider, _amount);
     }
 }

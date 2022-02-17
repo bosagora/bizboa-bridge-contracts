@@ -2,9 +2,10 @@ import chai, { expect } from "chai";
 import { solidity } from "ethereum-waffle";
 import { waffle, ethers } from "hardhat";
 import { AtomicSwap, TestERC20 } from "../typechain";
+import { createKey, sha256, BufferToString, createLockBoxID } from "./Utility";
 
 chai.use(solidity);
-import * as crypto from "crypto";
+
 import * as assert from "assert";
 
 describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
@@ -23,32 +24,6 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
     let key: string;
 
     let lockBoxID: string;
-
-    function createKey(): Buffer {
-        return crypto.randomBytes(32);
-    }
-
-    function sha256(data: Buffer): Buffer {
-        return crypto.createHash("sha256").update(data).digest();
-    }
-
-    function StringToBuffer(hex: string): Buffer {
-        const start = hex.substring(0, 2) === "0x" ? 2 : 0;
-        return Buffer.from(hex.substring(start), "hex");
-    }
-
-    function BufferToString(data: Buffer): string {
-        return "0x" + data.toString("hex");
-    }
-
-    function createLockBoxID(): Buffer {
-        const baseTimestamp = new Date(2020, 0, 1).getTime();
-        const nowTimestamp = new Date().getTime();
-        const value = Math.floor((nowTimestamp - baseTimestamp) / 1000);
-        const timestamp_buffer = Buffer.alloc(4);
-        timestamp_buffer.writeUInt32BE(value, 0);
-        return Buffer.concat([timestamp_buffer, crypto.randomBytes(28)]);
-    }
 
     const liquidityAmount = 1000000;
     const swapAmount = 10000;
@@ -80,8 +55,10 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         });
 
         before("Send liquidity", async () => {
-            await tokenEthereum.connect(adminSigner).transfer(swapEthereum.address, liquidityAmount);
-            await tokenLuniverse.connect(adminSigner).transfer(swapLuniverse.address, liquidityAmount);
+            await tokenEthereum.connect(adminSigner).approve(swapEthereum.address, liquidityAmount);
+            await swapEthereum.connect(adminSigner).increaseLiquidity(admin.address, liquidityAmount);
+            await tokenLuniverse.connect(adminSigner).approve(swapLuniverse.address, liquidityAmount);
+            await swapLuniverse.connect(adminSigner).increaseLiquidity(admin.address, liquidityAmount);
         });
 
         it("Add a manager", async () => {
