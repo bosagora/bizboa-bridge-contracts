@@ -1,7 +1,7 @@
 {
-  "name": "boa-atomic-swap",
+  "name": "bizboa-bridge-contracts",
   "version": "1.0.0",
-  "description": "BOA Atomic Swap",
+  "description": "Contracts of BizBOA Bridge ",
   "main": "",
   "directories": {
     "test": "test"
@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bosagora/boa-atomic-swap.git"
+    "url": "git+https://github.com/bosagora/bizboa-bridge-contracts.git"
   },
   "author": "BOSAGORA Foundation",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/bosagora/boa-atomic-swap/issues"
+    "url": "https://github.com/bosagora/bizboa-bridge-contracts/issues"
   },
-  "homepage": "https://github.com/bosagora/boa-atomic-swap#readme",
+  "homepage": "https://github.com/bosagora/bizboa-bridge-contracts#readme",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.4",
     "@nomiclabs/hardhat-etherscan": "^2.1.8",

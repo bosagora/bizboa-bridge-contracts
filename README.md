@@ -1,2 +1,2 @@
-# boa-atomic-swap
-BOA Atomic Swap
+# bizboa-bridge-contracts
+Contract of BizBOA Bridge
