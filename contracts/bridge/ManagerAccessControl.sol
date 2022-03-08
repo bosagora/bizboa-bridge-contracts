@@ -17,7 +17,7 @@ contract ManagerAccessControl is AccessControl, Ownable {
 
     /// @dev Restricted to manager.
     modifier onlyManager() {
-        require(isManager(msg.sender), "Restricted to members.");
+        require(isManager(msg.sender), "Only managers can call.|NOT_MANAGER_ROLL");
         _;
     }
 
