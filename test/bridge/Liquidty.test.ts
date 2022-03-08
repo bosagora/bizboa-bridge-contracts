@@ -1,8 +1,8 @@
 import chai, { expect } from "chai";
 import { solidity } from "ethereum-waffle";
-import { waffle, ethers } from "hardhat";
-import { AtomicSwap, TestERC20 } from "../typechain";
-import { createKey, sha256, BufferToString, createLockBoxID } from "./Utility";
+import { ethers, waffle } from "hardhat";
+import { AtomicSwap, TestERC20 } from "../../typechain";
+import { BufferToString, createKey, createLockBoxID, sha256 } from "../Utility";
 
 chai.use(solidity);
 
