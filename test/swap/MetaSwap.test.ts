@@ -1,0 +1,154 @@
+import assert from "assert";
+import { expect } from "chai";
+import { ethers, waffle } from "hardhat";
+import { MetaSwap, TestERC20 } from "../../typechain";
+import { ContractUtils } from "../ContractUtils";
+
+describe("Test of MetaSwap Contract", () => {
+    let bizToken: TestERC20;
+    let metaSwap: MetaSwap;
+    let depositLockBoxID: string;
+    let withdrawLockBoxID: string;
+    let withdrawLockBoxID2: string;
+    let depositOrderIdentifier: string;
+    let withdrawOrderIdentifier: string;
+
+    const provider = waffle.provider;
+    const [owner, manager, user01, user02] = provider.getWallets();
+    const ownerSigner = provider.getSigner(owner.address);
+    const managerSigner = provider.getSigner(manager.address);
+    const user01Signer = provider.getSigner(user01.address);
+    const user02Signer = provider.getSigner(user02.address);
+
+    const liquidityAmount = 200;
+
+    before(async () => {
+        const erc20 = await ethers.getContractFactory("TestERC20");
+        bizToken = await erc20.deploy("BOSAGORA Biz BOA Token", "BBOA");
+        await bizToken.deployed();
+        const swap = await ethers.getContractFactory("MetaSwap");
+        metaSwap = await swap.deploy(bizToken.address);
+        await metaSwap.deployed();
+    });
+
+    before("Create Key", async () => {
+        depositLockBoxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        withdrawLockBoxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        withdrawLockBoxID2 = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        depositOrderIdentifier = "4ceb87ce-d521-41a3-a5bb-7944fc8b9fbc";
+        withdrawOrderIdentifier = "a0265cc6-4a72-4240-86dd-c875e9bf971b";
+    });
+
+    it("Check the game token status", async () => {
+        expect(await bizToken.name()).to.equal("BOSAGORA Biz BOA Token");
+        expect(await bizToken.symbol()).to.equal("BBOA");
+        expect(await bizToken.decimals()).to.equal(7);
+        expect(await bizToken.balanceOf(owner.address)).to.equal(1000000000000000);
+    });
+
+    it("Register metaSwap contract a manager.", async () => {
+        const swap = await metaSwap.connect(ownerSigner);
+        expect(await swap.isManager(manager.address)).to.equal(false);
+        await swap.addManager(manager.address);
+        expect(await swap.isManager(manager.address)).to.equal(true);
+    });
+
+    it("Send liquidity", async () => {
+        await bizToken.connect(ownerSigner).approve(metaSwap.address, liquidityAmount);
+        await expect(metaSwap.connect(ownerSigner).increaseLiquidity(owner.address, liquidityAmount)).to.emit(
+            metaSwap,
+            "IncreasedLiquidity"
+        );
+        expect(await bizToken.balanceOf(metaSwap.address)).to.equal(liquidityAmount);
+        expect(await metaSwap.balanceOfLiquidity(owner.address)).to.equal(liquidityAmount);
+    });
+
+    it("Open the lock withdraw box to swap points for tokens.", async () => {
+        expect(await bizToken.connect(user01Signer).balanceOf(user01.address)).to.equal(0);
+        const swap = await metaSwap.connect(managerSigner);
+        await expect(swap.openWithdrawPoint2Token(withdrawLockBoxID, user01.address, 100)).to.emit(
+            swap,
+            "OpenWithdraw"
+        );
+        expect(await bizToken.connect(user01Signer).balanceOf(user01.address)).to.equal(0);
+    });
+
+    it("Check the open withdraw lock box.", async () => {
+        const result = await metaSwap.checkWithdrawPoint2Token(withdrawLockBoxID);
+        assert.strictEqual(result[0].toString(), "1");
+        assert.strictEqual(result[1].toString(), user01.address);
+        assert.strictEqual(result[2].toNumber(), 100);
+    });
+
+    it("Check the open withdraw box with duplicate lockBoxID", async () => {
+        await expect(metaSwap.connect(managerSigner).openWithdrawPoint2Token(withdrawLockBoxID, user02.address, 100)).to
+            .be.reverted;
+    });
+
+    it("Close the withdraw lock box", async () => {
+        await expect(metaSwap.connect(user01Signer).closeDepositToken2Point(withdrawLockBoxID, withdrawOrderIdentifier))
+            .to.be.reverted;
+        await expect(metaSwap.connect(user02Signer).closeDepositToken2Point(withdrawLockBoxID, withdrawOrderIdentifier))
+            .to.be.reverted;
+        await expect(
+            metaSwap.connect(managerSigner).closeWithdrawPoint2Token(withdrawLockBoxID, withdrawOrderIdentifier)
+        ).to.emit(metaSwap, "CloseWithdraw");
+
+        expect(await bizToken.connect(user01Signer).balanceOf(user01.address)).to.equal(100);
+    });
+
+    it("Check the close withdraw lock box", async () => {
+        const result = await metaSwap.checkWithdrawPoint2Token(withdrawLockBoxID);
+        assert.strictEqual(result[0].toString(), "2");
+        assert.strictEqual(result[1].toString(), user01.address);
+        assert.strictEqual(result[2].toNumber(), 100);
+        assert.strictEqual(result[3].toString(), withdrawOrderIdentifier);
+    });
+
+    it("Open deposit lock box to swap tokens for points.", async () => {
+        const token = await bizToken.connect(user01Signer);
+        expect(await token.balanceOf(user01.address)).to.equal(100);
+        await token.approve(metaSwap.address, 100);
+        expect(await token.allowance(user01.address, metaSwap.address)).to.eq(100);
+        await expect(metaSwap.connect(user01Signer).openDepositToken2Point(depositLockBoxID, 100)).to.emit(
+            metaSwap,
+            "OpenDeposit"
+        );
+    });
+
+    it("Check the open deposit lock box.", async () => {
+        const result = await metaSwap.checkDepositToken2Point(depositLockBoxID);
+        assert.strictEqual(result[0].toString(), "1");
+        assert.strictEqual(result[1].toString(), user01.address);
+        assert.strictEqual(result[2].toNumber(), 100);
+    });
+
+    it("Check the open deposit box with duplicate lockBoxID", async () => {
+        await expect(metaSwap.connect(managerSigner).openDepositToken2Point(depositLockBoxID, 100)).to.be.reverted;
+    });
+
+    it("Close the deposit lock box", async () => {
+        await expect(metaSwap.connect(user01Signer).closeDepositToken2Point(depositLockBoxID, depositOrderIdentifier))
+            .to.be.reverted;
+        await expect(metaSwap.connect(user02Signer).closeDepositToken2Point(depositLockBoxID, depositOrderIdentifier))
+            .to.be.reverted;
+        await expect(
+            metaSwap.connect(managerSigner).closeDepositToken2Point(depositLockBoxID, depositOrderIdentifier)
+        ).to.emit(metaSwap, "CloseDeposit");
+
+        expect(await bizToken.connect(user01Signer).balanceOf(user01.address)).to.equal(0);
+    });
+
+    it("Check the close deposit lock box", async () => {
+        const result = await metaSwap.checkDepositToken2Point(depositLockBoxID);
+        assert.strictEqual(result[0].toString(), "2");
+        assert.strictEqual(result[1].toString(), user01.address);
+        assert.strictEqual(result[2].toNumber(), 100);
+        assert.strictEqual(result[3].toString(), depositOrderIdentifier);
+    });
+
+    it("Check the over liquidity withdraw", async () => {
+        const swap = await metaSwap.connect(managerSigner);
+        await expect(swap.openWithdrawPoint2Token(withdrawLockBoxID2, user02.address, 500)).to.be.reverted;
+    });
+});
