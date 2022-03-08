@@ -23,6 +23,7 @@ jobs:
       - name: npm install, build, and test
         run: |
           npm ci
+          cp env/.env.sample env/.env
           npx hardhat compile
           npx hardhat test
           echo 'everything is done'
