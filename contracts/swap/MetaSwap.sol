@@ -11,6 +11,8 @@ import "./access/ManagerControl.sol";
 contract MetaSwap is Ownable, ManagerControl, Pausable {
     address private swapTokenAddress;
 
+    uint256 private BOA_UNIT_PER_COIN = 10_000_000;
+
     constructor(address _tokenAddress) {
         swapTokenAddress = _tokenAddress;
     }
@@ -24,6 +26,7 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
     struct LockBox {
         address traderAddress;
         uint256 amount;
+        uint256 withdraw_amount;
         uint256 createTimestamp;
         string orderIdentifier;
     }
@@ -70,6 +73,7 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
 
         LockBox memory box = LockBox({
             amount: _amount,
+            withdraw_amount: 0,
             traderAddress: msg.sender,
             createTimestamp: block.timestamp,
             orderIdentifier: ""
@@ -127,17 +131,22 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
     function openWithdrawPoint2Token(
         bytes32 _boxID,
         address _beneficiary,
-        uint256 _amount
+        uint256 _amount,
+        uint256 token_price
     ) public onlyRole(MANAGER_ROLE) onlyEmptyWithdrawBoxes(_boxID) whenNotPaused {
         IERC20 token = IERC20(swapTokenAddress);
 
+        uint256 point_amount = _amount;
+        uint256 token_amount = SafeMath.div(SafeMath.mul(point_amount, BOA_UNIT_PER_COIN), token_price);
+
         require(
-            _amount <= token.balanceOf(address(this)),
+            token_amount <= token.balanceOf(address(this)),
             "The liquidity of the withdrawal box is insufficient.|NOT_ALLOWED_OPEN_WITHDRAW"
         );
 
         LockBox memory box = LockBox({
             amount: _amount,
+            withdraw_amount: token_amount,
             traderAddress: _beneficiary,
             createTimestamp: block.timestamp,
             orderIdentifier: ""
@@ -148,29 +157,34 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         emit OpenWithdraw(_boxID, _beneficiary, _amount);
     }
 
-    function closeWithdrawPoint2Token(bytes32 _boxID, string memory _orderIdentifier)
-        public
-        onlyRole(MANAGER_ROLE)
-        onlyOpenWithdrawBoxes(_boxID)
-        whenNotPaused
-    {
+    function closeWithdrawPoint2Token(
+        bytes32 _boxID,
+        string memory _orderIdentifier,
+        uint256 token_price
+    ) public onlyRole(MANAGER_ROLE) onlyOpenWithdrawBoxes(_boxID) whenNotPaused {
+        require(token_price != 0, "The token price was entered incorrectly.|INCORRECT_TOKEN_PRICE");
+
         IERC20 token = IERC20(swapTokenAddress);
         LockBox memory box = withdrawBoxes[_boxID];
 
+        uint256 point_amount = box.amount;
+        uint256 token_amount = SafeMath.div(SafeMath.mul(point_amount, BOA_UNIT_PER_COIN), token_price);
+
         require(
-            box.amount <= token.balanceOf(address(this)),
+            token_amount <= token.balanceOf(address(this)),
             "The liquidity of the withdraw box is insufficient.|INSUFFICIENT_LIQUIDITY_CLOSE_WITHDRAW"
         );
 
         require(
-            token.transfer(box.traderAddress, box.amount),
+            token.transfer(box.traderAddress, token_amount),
             "An error occurred during refund to the user from the withdraw box.|ERROR_TRANSFER_CLOSE_WITHDRAW"
         );
 
+        withdrawBoxes[_boxID].withdraw_amount = token_amount;
         withdrawBoxes[_boxID].orderIdentifier = _orderIdentifier;
         withdrawBoxStates[_boxID] = States.CLOSED;
 
-        emit CloseWithdraw(_boxID, box.traderAddress, box.amount);
+        emit CloseWithdraw(_boxID, box.traderAddress, token_amount);
     }
 
     function checkWithdrawPoint2Token(bytes32 _boxID)
@@ -181,12 +195,13 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
             address traderAddress,
             uint256 amount,
             string memory orderIdentifier,
-            uint256 createTimestamp
+            uint256 createTimestamp,
+            uint256 withdraw_amount
         )
     {
         LockBox memory box = withdrawBoxes[_boxID];
         States state = withdrawBoxStates[_boxID];
-        return (state, box.traderAddress, box.amount, box.orderIdentifier, box.createTimestamp);
+        return (state, box.traderAddress, box.amount, box.orderIdentifier, box.createTimestamp, box.withdraw_amount);
     }
 
     mapping(address => uint256) public liquidBalance;
