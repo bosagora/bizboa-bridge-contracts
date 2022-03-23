@@ -37,6 +37,8 @@ contract BOABridge is ManagerAccessControl {
     struct DepositLockBox {
         uint256 timeLock;
         uint256 amount;
+        uint256 swapFee;
+        uint256 txFee;
         address traderAddress;
         address withdrawAddress;
         bytes32 secretLock;
@@ -85,10 +87,16 @@ contract BOABridge is ManagerAccessControl {
     function openDeposit(
         bytes32 _boxID,
         uint256 _amount,
+        uint256 _swapFee,
+        uint256 _txFee,
         address _withdrawAddress,
         bytes32 _secretLock
     ) public onlyInvalidDepositBoxes(_boxID) {
         require(depositBoxStates[_boxID] == States.INVALID, "The deposit box already exists.|ALREADY_OPEN_DEPOSIT");
+
+        uint256 totalFee = SafeMath.add(_swapFee, _txFee);
+        require(totalFee < _amount, "The fee is insufficient.|INSUFFICIENT_FEE");
+
         // Transfer value from the ERC20 trader to this contract.
         IERC20 token = IERC20(swapTokenAddress);
         require(
@@ -104,6 +112,8 @@ contract BOABridge is ManagerAccessControl {
         DepositLockBox memory box = DepositLockBox({
             timeLock: depositTimeLock,
             amount: _amount,
+            swapFee: _swapFee,
+            txFee: _txFee,
             traderAddress: msg.sender,
             withdrawAddress: _withdrawAddress,
             secretLock: _secretLock,
@@ -152,6 +162,8 @@ contract BOABridge is ManagerAccessControl {
             States states,
             uint256 timeLock,
             uint256 amount,
+            uint256 swapFee,
+            uint256 txFee,
             address traderAddress,
             address withdrawAddress,
             bytes32 secretLock,
@@ -164,6 +176,8 @@ contract BOABridge is ManagerAccessControl {
             state,
             box.timeLock,
             box.amount,
+            box.swapFee,
+            box.txFee,
             box.traderAddress,
             box.withdrawAddress,
             box.secretLock,
@@ -184,6 +198,8 @@ contract BOABridge is ManagerAccessControl {
     struct WithdrawLockBox {
         uint256 timeLock;
         uint256 amount;
+        uint256 swapFee;
+        uint256 txFee;
         address traderAddress;
         address withdrawAddress;
         bytes32 secretLock;
@@ -232,15 +248,22 @@ contract BOABridge is ManagerAccessControl {
     function openWithdraw(
         bytes32 _boxID,
         uint256 _amount,
+        uint256 _swapFee,
+        uint256 _txFee,
         address _traderAddress,
         address _withdrawAddress,
         bytes32 _secretLock
     ) public onlyManager onlyInvalidWithdrawBoxes(_boxID) {
         require(withdrawBoxStates[_boxID] == States.INVALID, "The withdraw box already exists.|ALREADY_OPEN_WITHDRAW");
+
+        uint256 totalFee = SafeMath.add(_swapFee, _txFee);
+        require(totalFee < _amount, "The fee is insufficient.|INSUFFICIENT_FEE");
+        uint256 sendAmount = SafeMath.sub(_amount, totalFee);
+
         // Transfer value from the ERC20 trader to this contract.
         IERC20 token = IERC20(swapTokenAddress);
         require(
-            _amount <= token.balanceOf(address(this)),
+            sendAmount <= token.balanceOf(address(this)),
             "The liquidity of the withdrawal box is insufficient.|NOT_ALLOWED_OPEN_WITHDRAW"
         );
 
@@ -248,6 +271,8 @@ contract BOABridge is ManagerAccessControl {
         WithdrawLockBox memory box = WithdrawLockBox({
             timeLock: withdrawTimeLock,
             amount: _amount,
+            swapFee: _swapFee,
+            txFee: _txFee,
             traderAddress: _traderAddress,
             withdrawAddress: _withdrawAddress,
             secretLock: _secretLock,
@@ -265,9 +290,13 @@ contract BOABridge is ManagerAccessControl {
         onlyWithSecretKeyWithdrawBoxes(_boxID, _secretKey)
     {
         WithdrawLockBox memory box = withdrawBoxes[_boxID];
+
+        uint256 totalFee = SafeMath.add(box.swapFee, box.txFee);
+        uint256 sendAmount = SafeMath.sub(box.amount, totalFee);
+
         IERC20 token = IERC20(swapTokenAddress);
         require(
-            box.amount <= token.balanceOf(address(this)),
+            sendAmount <= token.balanceOf(address(this)),
             "The liquidity of the withdraw box is insufficient.|INSUFFICIENT_LIQUIDITY_CLOSE_WITHDRAW"
         );
 
@@ -277,7 +306,7 @@ contract BOABridge is ManagerAccessControl {
 
         // Transfer the ERC20 funds from this contract to the withdrawing trader.
         require(
-            token.transfer(box.withdrawAddress, box.amount),
+            token.transfer(box.withdrawAddress, sendAmount),
             "An error occurred during refund to the user from the withdraw box.|ERROR_TRANSFER_CLOSE_WITHDRAW"
         );
 
@@ -298,6 +327,8 @@ contract BOABridge is ManagerAccessControl {
             States states,
             uint256 timeLock,
             uint256 amount,
+            uint256 swapFee,
+            uint256 txFee,
             address traderAddress,
             address withdrawAddress,
             bytes32 secretLock,
@@ -310,6 +341,8 @@ contract BOABridge is ManagerAccessControl {
             state,
             box.timeLock,
             box.amount,
+            box.swapFee,
+            box.txFee,
             box.traderAddress,
             box.withdrawAddress,
             box.secretLock,

@@ -29,6 +29,10 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
     const swapAmount = 10000;
     const timeLock = 60 * 60 * 24;
 
+    const swapFee = 100;
+    const txFee = 200;
+    const totalFee = swapFee + txFee;
+
     before(async () => {
         const BOABridgeFactory = await ethers.getContractFactory("BOABridge");
         const TestERC20Factory = await ethers.getContractFactory("TestERC20");
@@ -77,7 +81,9 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         it("Open the lock box in Ethereum by User", async () => {
             await tokenEthereum.connect(userSigner).approve(bridgeEthereum.address, swapAmount);
             expect(
-                await bridgeEthereum.connect(userSigner).openDeposit(lockBoxID, swapAmount, user.address, lock)
+                await bridgeEthereum
+                    .connect(userSigner)
+                    .openDeposit(lockBoxID, swapAmount, swapFee, txFee, user.address, lock)
             ).to.emit(bridgeEthereum, "OpenDeposit");
         });
 
@@ -85,16 +91,18 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
             const result = await bridgeEthereum.checkDeposit(lockBoxID);
             assert.strictEqual(result[0].toString(), "1");
             assert.strictEqual(result[2].toNumber(), swapAmount);
-            assert.strictEqual(result[3].toString(), user.address);
-            assert.strictEqual(result[4].toString(), user.address);
-            assert.strictEqual(result[5].toString(), lock);
+            assert.strictEqual(result[3].toNumber(), swapFee);
+            assert.strictEqual(result[4].toNumber(), txFee);
+            assert.strictEqual(result[5].toString(), user.address);
+            assert.strictEqual(result[6].toString(), user.address);
+            assert.strictEqual(result[7].toString(), lock);
         });
 
         it("Open the lock box in Luniverse by Manager", async () => {
             expect(
                 await bridgeLuniverse
                     .connect(managerSigner)
-                    .openWithdraw(lockBoxID, swapAmount, user.address, user.address, lock)
+                    .openWithdraw(lockBoxID, swapAmount, swapFee, txFee, user.address, user.address, lock)
             ).to.emit(bridgeLuniverse, "OpenWithdraw");
         });
 
@@ -102,9 +110,11 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
             const result = await bridgeLuniverse.connect(userSigner).checkWithdraw(lockBoxID);
             assert.strictEqual(result[0].toString(), "1");
             assert.strictEqual(result[2].toNumber(), swapAmount);
-            assert.strictEqual(result[3].toString(), user.address);
-            assert.strictEqual(result[4].toString(), user.address);
-            assert.strictEqual(result[5].toString(), lock);
+            assert.strictEqual(result[3].toNumber(), swapFee);
+            assert.strictEqual(result[4].toNumber(), txFee);
+            assert.strictEqual(result[5].toString(), user.address);
+            assert.strictEqual(result[6].toString(), user.address);
+            assert.strictEqual(result[7].toString(), lock);
         });
 
         it("Close the lock box in Luniverse by Manager", async () => {
@@ -113,9 +123,9 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                 "CloseWithdraw"
             );
             const user_balance = await tokenLuniverse.balanceOf(user.address);
-            assert.strictEqual(user_balance.toNumber(), swapAmount);
+            assert.strictEqual(user_balance.toNumber(), swapAmount - totalFee);
             const bridgeLuniverse_balance = await tokenLuniverse.balanceOf(bridgeLuniverse.address);
-            assert.strictEqual(bridgeLuniverse_balance.toNumber(), liquidityAmount - swapAmount);
+            assert.strictEqual(bridgeLuniverse_balance.toNumber(), liquidityAmount - swapAmount + totalFee);
         });
 
         it("Close the lock box in Ethereum by Manager", async () => {
@@ -131,8 +141,26 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         it("Only the manager can open the withdraw lock box", async () => {
             const boxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
             await assert.rejects(
-                bridgeLuniverse.connect(userSigner).openWithdraw(boxID, swapAmount, user.address, user.address, lock)
+                bridgeLuniverse
+                    .connect(userSigner)
+                    .openWithdraw(boxID, swapAmount, 0, 0, user.address, user.address, lock)
             );
+        });
+
+        it("Transaction is rejected if the fee is insufficient", async () => {
+            await tokenEthereum.connect(userSigner).approve(bridgeEthereum.address, swapAmount);
+            await expect(
+                bridgeEthereum
+                    .connect(userSigner)
+                    .openDeposit(
+                        ContractUtils.BufferToString(ContractUtils.createLockBoxID()),
+                        swapAmount,
+                        swapAmount,
+                        txFee,
+                        user.address,
+                        lock
+                    )
+            ).to.be.reverted;
         });
     });
 
@@ -150,7 +178,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
 
         it("Open Deposit Lock Box", async () => {
             await tokenEthereum.connect(userSigner).approve(bridgeEthereum.address, swapAmount);
-            await bridgeEthereum.connect(userSigner).openDeposit(lockBox_expiry, swapAmount, user.address, lock);
+            await bridgeEthereum.connect(userSigner).openDeposit(lockBox_expiry, swapAmount, 0, 0, user.address, lock);
         });
 
         it("No Expiry", async () => {
@@ -186,7 +214,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         it("Open Withdraw Lock Box", async () => {
             await bridgeEthereum
                 .connect(managerSigner)
-                .openWithdraw(lockBox_expiry, swapAmount, user.address, user.address, lock);
+                .openWithdraw(lockBox_expiry, swapAmount, 0, 0, user.address, user.address, lock);
         });
 
         it("No Expiry", async () => {

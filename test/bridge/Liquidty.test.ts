@@ -97,7 +97,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
             expect(
                 await bridgeContract
                     .connect(managerSigner)
-                    .openWithdraw(lockBoxID, swapAmount, user.address, user.address, lock)
+                    .openWithdraw(lockBoxID, swapAmount, 0, 0, user.address, user.address, lock)
             ).to.emit(bridgeContract, "OpenWithdraw");
         });
 
