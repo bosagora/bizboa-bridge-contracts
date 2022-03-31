@@ -1,5 +1,6 @@
 import chai, { expect } from "chai";
 import { solidity } from "ethereum-waffle";
+import { BigNumber } from "ethers";
 import { ethers, waffle } from "hardhat";
 import { BOABridge, TestERC20 } from "../../typechain";
 import { ContractUtils } from "../ContractUtils";
@@ -42,36 +43,44 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         bridge_ethnet = (await BOABridgeFactory.deploy(
             token_ethnet.address,
             time_lock,
-            fee_manager.address
+            fee_manager.address,
+            true // 수수료는 이더넷의 브리지에서만 모아집니다.
         )) as BOABridge;
         await bridge_ethnet.deployed();
 
         token_biznet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
         await token_biznet.deployed();
-        bridge_biznet = await BOABridgeFactory.deploy(token_biznet.address, time_lock, fee_manager.address);
+        bridge_biznet = await BOABridgeFactory.deploy(token_biznet.address, time_lock, fee_manager.address, false);
         await bridge_biznet.deployed();
     });
 
+    before("Send liquidity", async () => {
+        await token_ethnet.connect(admin_signer).approve(bridge_ethnet.address, liquidity_amount);
+        await bridge_ethnet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount);
+        await token_biznet.connect(admin_signer).approve(bridge_biznet.address, liquidity_amount);
+        await bridge_biznet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount);
+    });
+
+    before("Add a manager", async () => {
+        await bridge_ethnet.connect(admin_signer).addManager(manager.address);
+        await bridge_biznet.connect(admin_signer).addManager(manager.address);
+    });
+
     context("EthNet: User -> Contract, BizNet : Contract -> User", async () => {
+        let old_user_balance_ethnet: BigNumber;
+        let old_user_balance_biznet: BigNumber;
+        let old_bridge_ethnet_balance: BigNumber;
+        let old_bridge_biznet_balance: BigNumber;
+
         before("Distribute the fund", async () => {
             await token_ethnet.connect(admin_signer).transfer(user.address, swap_amount);
         });
 
-        before("Send liquidity", async () => {
-            await token_ethnet.connect(admin_signer).approve(bridge_ethnet.address, liquidity_amount);
-            await bridge_ethnet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount);
-            await token_biznet.connect(admin_signer).approve(bridge_biznet.address, liquidity_amount);
-            await bridge_biznet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount);
-        });
-
-        it("Add a manager", async () => {
-            await bridge_ethnet.connect(admin_signer).addManager(manager.address);
-            await bridge_biznet.connect(admin_signer).addManager(manager.address);
-        });
-
         it("Check the balance", async () => {
-            const user_balance = await token_biznet.balanceOf(user.address);
-            assert.strictEqual(user_balance.toNumber(), 0);
+            old_user_balance_ethnet = await token_ethnet.balanceOf(user.address);
+            old_user_balance_biznet = await token_biznet.balanceOf(user.address);
+            old_bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
+            old_bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
         });
 
         it("Create key by User", () => {
@@ -126,10 +135,16 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                 bridge_biznet,
                 "CloseWithdraw"
             );
-            const user_balance = await token_biznet.balanceOf(user.address);
-            assert.strictEqual(user_balance.toNumber(), swap_amount - total_fee);
+            const user_balance_biznet = await token_biznet.balanceOf(user.address);
+            assert.strictEqual(
+                user_balance_biznet.toNumber() - old_user_balance_biznet.toNumber(),
+                swap_amount - total_fee
+            );
             const bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
-            assert.strictEqual(bridge_biznet_balance.toNumber(), liquidity_amount - swap_amount + total_fee);
+            assert.strictEqual(
+                bridge_biznet_balance.toNumber(),
+                old_bridge_biznet_balance.toNumber() - swap_amount + total_fee
+            );
         });
 
         it("Close the lock box in EthNet by Manager", async () => {
@@ -139,7 +154,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                 "CloseDeposit"
             );
             const bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
-            assert.strictEqual(bridge_ethnet_balance.toNumber(), liquidity_amount + swap_amount);
+            assert.strictEqual(bridge_ethnet_balance.toNumber(), old_bridge_ethnet_balance.toNumber() + swap_amount);
         });
 
         it("Only the manager can open the withdraw lock box", async () => {
@@ -167,9 +182,110 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
             ).to.be.reverted;
         });
 
+        // 수수료는 이더넷의 브리지에서만 모아집니다.
         it("Check the liquidity balance of manager", async () => {
             const fee_balance_eth = await bridge_ethnet.balanceOfLiquidity(fee_manager.address);
             assert.strictEqual(fee_balance_eth.toNumber(), total_fee);
+            const fee_balance_biz = await bridge_biznet.balanceOfLiquidity(fee_manager.address);
+            assert.strictEqual(fee_balance_biz.toNumber(), 0);
+        });
+    });
+
+    context("BizNet: User -> Contract, EthNet : Contract -> User", async () => {
+        let old_user_balance_ethnet: BigNumber;
+        let old_user_balance_biznet: BigNumber;
+        let old_bridge_ethnet_balance: BigNumber;
+        let old_bridge_biznet_balance: BigNumber;
+
+        before("Distribute the fund", async () => {
+            await token_biznet.connect(admin_signer).transfer(user.address, swap_amount);
+        });
+
+        it("Check the balance", async () => {
+            old_user_balance_ethnet = await token_ethnet.balanceOf(user.address);
+            old_user_balance_biznet = await token_biznet.balanceOf(user.address);
+            old_bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
+            old_bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
+        });
+
+        it("Create key by User", () => {
+            const key_buffer = ContractUtils.createKey();
+            const lock_buffer = ContractUtils.sha256(key_buffer);
+            key = ContractUtils.BufferToString(key_buffer);
+            lock = ContractUtils.BufferToString(lock_buffer);
+            lock_box_id = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        });
+
+        it("Open the lock box in BizNet by User", async () => {
+            await token_biznet.connect(user_signer).approve(bridge_biznet.address, swap_amount);
+            expect(
+                await bridge_biznet
+                    .connect(user_signer)
+                    .openDeposit(lock_box_id, swap_amount, swap_fee, tx_fee, user.address, lock)
+            ).to.emit(bridge_biznet, "OpenDeposit");
+        });
+
+        it("Check the lock box in BizNet by Manager", async () => {
+            const result = await bridge_biznet.checkDeposit(lock_box_id);
+            assert.strictEqual(result[0].toString(), "1");
+            assert.strictEqual(result[2].toNumber(), swap_amount);
+            assert.strictEqual(result[3].toNumber(), swap_fee);
+            assert.strictEqual(result[4].toNumber(), tx_fee);
+            assert.strictEqual(result[5].toString(), user.address);
+            assert.strictEqual(result[6].toString(), user.address);
+            assert.strictEqual(result[7].toString(), lock);
+        });
+
+        it("Open the lock box in EthNet by Manager", async () => {
+            expect(
+                await bridge_ethnet
+                    .connect(manager_signer)
+                    .openWithdraw(lock_box_id, swap_amount, swap_fee, tx_fee, user.address, user.address, lock)
+            ).to.emit(bridge_ethnet, "OpenWithdraw");
+        });
+
+        it("Check the lock box in BizNet by User", async () => {
+            const result = await bridge_ethnet.connect(user_signer).checkWithdraw(lock_box_id);
+            assert.strictEqual(result[0].toString(), "1");
+            assert.strictEqual(result[2].toNumber(), swap_amount);
+            assert.strictEqual(result[3].toNumber(), swap_fee);
+            assert.strictEqual(result[4].toNumber(), tx_fee);
+            assert.strictEqual(result[5].toString(), user.address);
+            assert.strictEqual(result[6].toString(), user.address);
+            assert.strictEqual(result[7].toString(), lock);
+        });
+
+        it("Close the lock box in EthNet by Manager", async () => {
+            expect(await bridge_ethnet.connect(manager_signer).closeWithdraw(lock_box_id, key)).to.emit(
+                bridge_ethnet,
+                "CloseWithdraw"
+            );
+            const new_user_balance_ethnet = await token_ethnet.balanceOf(user.address);
+            assert.strictEqual(
+                new_user_balance_ethnet.toNumber() - old_user_balance_ethnet.toNumber(),
+                swap_amount - total_fee
+            );
+            const bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
+            assert.strictEqual(
+                bridge_ethnet_balance.toNumber(),
+                old_bridge_ethnet_balance.toNumber() - swap_amount + total_fee
+            );
+        });
+
+        it("Close the lock box in BizNet by Manager", async () => {
+            const secretKey = await bridge_ethnet.checkSecretKeyWithdraw(lock_box_id);
+            expect(await bridge_biznet.connect(manager_signer).closeDeposit(lock_box_id, secretKey)).to.emit(
+                bridge_biznet,
+                "CloseDeposit"
+            );
+            const bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
+            assert.strictEqual(bridge_biznet_balance.toNumber(), old_bridge_biznet_balance.toNumber() + swap_amount);
+        });
+
+        // 수수료는 이더넷의 브리지에서만 모아집니다.
+        it("Check the liquidity balance of manager", async () => {
+            const fee_balance_eth = await bridge_ethnet.balanceOfLiquidity(fee_manager.address);
+            assert.strictEqual(fee_balance_eth.toNumber(), total_fee * 2);
             const fee_balance_biz = await bridge_biznet.balanceOfLiquidity(fee_manager.address);
             assert.strictEqual(fee_balance_biz.toNumber(), 0);
         });
