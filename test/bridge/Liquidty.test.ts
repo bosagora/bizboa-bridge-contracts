@@ -9,80 +9,80 @@ import * as assert from "assert";
 chai.use(solidity);
 
 describe("Test of Increase Liquidity & Decrease Liquidity", () => {
-    let bridgeContract: BOABridge;
-    let tokenContract: TestERC20;
+    let bridge_contract: BOABridge;
+    let token_contract: TestERC20;
 
     const provider = waffle.provider;
     const [admin, user, manager, liquidProvider] = provider.getWallets();
-    const adminSigner = provider.getSigner(admin.address);
-    const userSigner = provider.getSigner(user.address);
-    const managerSigner = provider.getSigner(manager.address);
-    const liquidProviderSigner = provider.getSigner(liquidProvider.address);
+    const admin_signer = provider.getSigner(admin.address);
+    const user_signer = provider.getSigner(user.address);
+    const manager_signer = provider.getSigner(manager.address);
+    const liquid_provider_signer = provider.getSigner(liquidProvider.address);
 
     let lock: string;
     let key: string;
 
-    let lockBoxID: string;
+    let lock_box_id: string;
 
-    const liquidityAmount = 1000000;
-    const swapAmount = 10000;
-    const timeLock = 60 * 60 * 24;
+    const liquidity_amount = 1000000;
+    const swap_amount = 10000;
+    const time_lock = 60 * 60 * 24;
 
     before(async () => {
         const BOABridgeFactory = await ethers.getContractFactory("BOABridge");
         const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
-        tokenContract = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
-        await tokenContract.deployed();
+        token_contract = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
+        await token_contract.deployed();
 
-        bridgeContract = await BOABridgeFactory.deploy(tokenContract.address, timeLock);
-        await bridgeContract.deployed();
+        bridge_contract = await BOABridgeFactory.deploy(token_contract.address, time_lock);
+        await bridge_contract.deployed();
     });
 
     before("Distribute the fund", async () => {
-        await tokenContract.connect(adminSigner).transfer(liquidProvider.address, liquidityAmount);
-        assert.strictEqual((await tokenContract.balanceOf(bridgeContract.address)).toNumber(), 0);
+        await token_contract.connect(admin_signer).transfer(liquidProvider.address, liquidity_amount);
+        assert.strictEqual((await token_contract.balanceOf(bridge_contract.address)).toNumber(), 0);
     });
 
     context("Basic Test", async () => {
         it("Increase liquidity", async () => {
-            await tokenContract.connect(liquidProviderSigner).approve(bridgeContract.address, liquidityAmount);
-            await bridgeContract
-                .connect(liquidProviderSigner)
-                .increaseLiquidity(liquidProvider.address, liquidityAmount);
+            await token_contract.connect(liquid_provider_signer).approve(bridge_contract.address, liquidity_amount);
+            await bridge_contract
+                .connect(liquid_provider_signer)
+                .increaseLiquidity(liquidProvider.address, liquidity_amount);
 
-            const liquidBalance = await bridgeContract
-                .connect(liquidProviderSigner)
+            const liquid_balance = await bridge_contract
+                .connect(liquid_provider_signer)
                 .liquidBalance(liquidProvider.address);
 
-            assert.strictEqual(liquidBalance.toNumber(), liquidityAmount);
-            assert.strictEqual((await tokenContract.balanceOf(liquidProvider.address)).toNumber(), 0);
+            assert.strictEqual(liquid_balance.toNumber(), liquidity_amount);
+            assert.strictEqual((await token_contract.balanceOf(liquidProvider.address)).toNumber(), 0);
         });
 
         it("Decrease liquidity", async () => {
-            await bridgeContract
-                .connect(liquidProviderSigner)
-                .decreaseLiquidity(liquidProvider.address, liquidityAmount);
+            await bridge_contract
+                .connect(liquid_provider_signer)
+                .decreaseLiquidity(liquidProvider.address, liquidity_amount);
 
-            const liquidBalance = await bridgeContract
-                .connect(liquidProviderSigner)
+            const liquid_balance = await bridge_contract
+                .connect(liquid_provider_signer)
                 .liquidBalance(liquidProvider.address);
 
-            assert.strictEqual(liquidBalance.toNumber(), 0);
-            assert.strictEqual((await tokenContract.balanceOf(liquidProvider.address)).toNumber(), liquidityAmount);
+            assert.strictEqual(liquid_balance.toNumber(), 0);
+            assert.strictEqual((await token_contract.balanceOf(liquidProvider.address)).toNumber(), liquidity_amount);
         });
     });
 
     context("Insufficient balance", async () => {
         it("Second increase liquidity", async () => {
-            await tokenContract.connect(liquidProviderSigner).approve(bridgeContract.address, liquidityAmount);
-            await bridgeContract
-                .connect(liquidProviderSigner)
-                .increaseLiquidity(liquidProvider.address, liquidityAmount);
+            await token_contract.connect(liquid_provider_signer).approve(bridge_contract.address, liquidity_amount);
+            await bridge_contract
+                .connect(liquid_provider_signer)
+                .increaseLiquidity(liquidProvider.address, liquidity_amount);
         });
 
         it("Add a manager", async () => {
-            await bridgeContract.connect(adminSigner).addManager(manager.address);
+            await bridge_contract.connect(admin_signer).addManager(manager.address);
         });
 
         it("Create key by User", () => {
@@ -90,44 +90,46 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
             const lock_buffer = ContractUtils.sha256(key_buffer);
             key = ContractUtils.BufferToString(key_buffer);
             lock = ContractUtils.BufferToString(lock_buffer);
-            lockBoxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+            lock_box_id = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
         });
 
         it("Open the lock box in Luniverse by Manager", async () => {
             expect(
-                await bridgeContract
-                    .connect(managerSigner)
-                    .openWithdraw(lockBoxID, swapAmount, 0, 0, user.address, user.address, lock)
-            ).to.emit(bridgeContract, "OpenWithdraw");
+                await bridge_contract
+                    .connect(manager_signer)
+                    .openWithdraw(lock_box_id, swap_amount, 0, 0, user.address, user.address, lock)
+            ).to.emit(bridge_contract, "OpenWithdraw");
         });
 
         it("Close the lock box in Luniverse by User", async () => {
-            expect(await bridgeContract.connect(userSigner).closeWithdraw(lockBoxID, key)).to.emit(
-                bridgeContract,
+            expect(await bridge_contract.connect(user_signer).closeWithdraw(lock_box_id, key)).to.emit(
+                bridge_contract,
                 "CloseWithdraw"
             );
-            const user_balance = await tokenContract.balanceOf(user.address);
-            assert.strictEqual(user_balance.toNumber(), swapAmount);
-            const swapLuniverse_balance = await tokenContract.balanceOf(bridgeContract.address);
-            assert.strictEqual(swapLuniverse_balance.toNumber(), liquidityAmount - swapAmount);
+            const user_balance = await token_contract.balanceOf(user.address);
+            assert.strictEqual(user_balance.toNumber(), swap_amount);
+            const swapLuniverse_balance = await token_contract.balanceOf(bridge_contract.address);
+            assert.strictEqual(swapLuniverse_balance.toNumber(), liquidity_amount - swap_amount);
         });
 
         it("Error occurs when the overall liquidity decreases - insufficient balance", async () => {
             await assert.rejects(
-                bridgeContract.connect(liquidProviderSigner).decreaseLiquidity(liquidProvider.address, liquidityAmount)
+                bridge_contract
+                    .connect(liquid_provider_signer)
+                    .decreaseLiquidity(liquidProvider.address, liquidity_amount)
             );
         });
 
         it("Decrease some of the liquidity", async () => {
-            await bridgeContract
-                .connect(liquidProviderSigner)
-                .decreaseLiquidity(liquidProvider.address, liquidityAmount - swapAmount);
+            await bridge_contract
+                .connect(liquid_provider_signer)
+                .decreaseLiquidity(liquidProvider.address, liquidity_amount - swap_amount);
 
-            const liquidBalance = await bridgeContract
-                .connect(liquidProviderSigner)
+            const liquid_balance = await bridge_contract
+                .connect(liquid_provider_signer)
                 .liquidBalance(liquidProvider.address);
 
-            assert.strictEqual(liquidBalance.toNumber(), swapAmount);
+            assert.strictEqual(liquid_balance.toNumber(), swap_amount);
         });
     });
 });
