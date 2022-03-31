@@ -9,64 +9,64 @@ import * as assert from "assert";
 chai.use(solidity);
 
 describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
-    let bridgeEthereum: BOABridge;
-    let tokenEthereum: TestERC20;
-    let bridgeLuniverse: BOABridge;
-    let tokenLuniverse: TestERC20;
+    let bridge_ethnet: BOABridge;
+    let token_ethnet: TestERC20;
+    let bridge_biznet: BOABridge;
+    let token_biznet: TestERC20;
 
     const provider = waffle.provider;
     const [admin, user, manager] = provider.getWallets();
-    const adminSigner = provider.getSigner(admin.address);
-    const userSigner = provider.getSigner(user.address);
-    const managerSigner = provider.getSigner(manager.address);
+    const admin_signer = provider.getSigner(admin.address);
+    const user_signer = provider.getSigner(user.address);
+    const manager_signer = provider.getSigner(manager.address);
 
     let lock: string;
     let key: string;
 
-    let lockBoxID: string;
+    let lock_box_id: string;
 
-    const liquidityAmount = 1000000;
-    const swapAmount = 10000;
-    const timeLock = 60 * 60 * 24;
+    const liquidity_amount = 1000000;
+    const swap_amount = 10000;
+    const time_lock = 60 * 60 * 24;
 
-    const swapFee = 100;
-    const txFee = 200;
-    const totalFee = swapFee + txFee;
+    const swap_fee = 100;
+    const tx_fee = 200;
+    const total_fee = swap_fee + tx_fee;
 
     before(async () => {
         const BOABridgeFactory = await ethers.getContractFactory("BOABridge");
         const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
-        tokenEthereum = await TestERC20Factory.deploy("BOSAGORA Token", "BOA1");
-        await tokenEthereum.deployed();
-        bridgeEthereum = (await BOABridgeFactory.deploy(tokenEthereum.address, timeLock)) as BOABridge;
-        await bridgeEthereum.deployed();
+        token_ethnet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA1");
+        await token_ethnet.deployed();
+        bridge_ethnet = (await BOABridgeFactory.deploy(token_ethnet.address, time_lock)) as BOABridge;
+        await bridge_ethnet.deployed();
 
-        tokenLuniverse = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
-        await tokenLuniverse.deployed();
-        bridgeLuniverse = await BOABridgeFactory.deploy(tokenLuniverse.address, timeLock);
-        await bridgeLuniverse.deployed();
+        token_biznet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
+        await token_biznet.deployed();
+        bridge_biznet = await BOABridgeFactory.deploy(token_biznet.address, time_lock);
+        await bridge_biznet.deployed();
     });
 
-    context("Ethereum: User -> Contract, Luniverse : Contract -> User", async () => {
+    context("EthNet: User -> Contract, BizNet : Contract -> User", async () => {
         before("Distribute the fund", async () => {
-            await tokenEthereum.connect(adminSigner).transfer(user.address, swapAmount);
+            await token_ethnet.connect(admin_signer).transfer(user.address, swap_amount);
         });
 
         before("Send liquidity", async () => {
-            await tokenEthereum.connect(adminSigner).approve(bridgeEthereum.address, liquidityAmount);
-            await bridgeEthereum.connect(adminSigner).increaseLiquidity(admin.address, liquidityAmount);
-            await tokenLuniverse.connect(adminSigner).approve(bridgeLuniverse.address, liquidityAmount);
-            await bridgeLuniverse.connect(adminSigner).increaseLiquidity(admin.address, liquidityAmount);
+            await token_ethnet.connect(admin_signer).approve(bridge_ethnet.address, liquidity_amount);
+            await bridge_ethnet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount);
+            await token_biznet.connect(admin_signer).approve(bridge_biznet.address, liquidity_amount);
+            await bridge_biznet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount);
         });
 
         it("Add a manager", async () => {
-            await bridgeEthereum.connect(adminSigner).addManager(manager.address);
-            await bridgeLuniverse.connect(adminSigner).addManager(manager.address);
+            await bridge_ethnet.connect(admin_signer).addManager(manager.address);
+            await bridge_biznet.connect(admin_signer).addManager(manager.address);
         });
 
         it("Check the balance", async () => {
-            const user_balance = await tokenLuniverse.balanceOf(user.address);
+            const user_balance = await token_biznet.balanceOf(user.address);
             assert.strictEqual(user_balance.toNumber(), 0);
         });
 
@@ -75,88 +75,88 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
             const lock_buffer = ContractUtils.sha256(key_buffer);
             key = ContractUtils.BufferToString(key_buffer);
             lock = ContractUtils.BufferToString(lock_buffer);
-            lockBoxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+            lock_box_id = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
         });
 
-        it("Open the lock box in Ethereum by User", async () => {
-            await tokenEthereum.connect(userSigner).approve(bridgeEthereum.address, swapAmount);
+        it("Open the lock box in EthNet by User", async () => {
+            await token_ethnet.connect(user_signer).approve(bridge_ethnet.address, swap_amount);
             expect(
-                await bridgeEthereum
-                    .connect(userSigner)
-                    .openDeposit(lockBoxID, swapAmount, swapFee, txFee, user.address, lock)
-            ).to.emit(bridgeEthereum, "OpenDeposit");
+                await bridge_ethnet
+                    .connect(user_signer)
+                    .openDeposit(lock_box_id, swap_amount, swap_fee, tx_fee, user.address, lock)
+            ).to.emit(bridge_ethnet, "OpenDeposit");
         });
 
-        it("Check the lock box in Ethereum by Manager", async () => {
-            const result = await bridgeEthereum.checkDeposit(lockBoxID);
+        it("Check the lock box in EthNet by Manager", async () => {
+            const result = await bridge_ethnet.checkDeposit(lock_box_id);
             assert.strictEqual(result[0].toString(), "1");
-            assert.strictEqual(result[2].toNumber(), swapAmount);
-            assert.strictEqual(result[3].toNumber(), swapFee);
-            assert.strictEqual(result[4].toNumber(), txFee);
+            assert.strictEqual(result[2].toNumber(), swap_amount);
+            assert.strictEqual(result[3].toNumber(), swap_fee);
+            assert.strictEqual(result[4].toNumber(), tx_fee);
             assert.strictEqual(result[5].toString(), user.address);
             assert.strictEqual(result[6].toString(), user.address);
             assert.strictEqual(result[7].toString(), lock);
         });
 
-        it("Open the lock box in Luniverse by Manager", async () => {
+        it("Open the lock box in BizNet by Manager", async () => {
             expect(
-                await bridgeLuniverse
-                    .connect(managerSigner)
-                    .openWithdraw(lockBoxID, swapAmount, swapFee, txFee, user.address, user.address, lock)
-            ).to.emit(bridgeLuniverse, "OpenWithdraw");
+                await bridge_biznet
+                    .connect(manager_signer)
+                    .openWithdraw(lock_box_id, swap_amount, swap_fee, tx_fee, user.address, user.address, lock)
+            ).to.emit(bridge_biznet, "OpenWithdraw");
         });
 
-        it("Check the lock box in Luniverse by User", async () => {
-            const result = await bridgeLuniverse.connect(userSigner).checkWithdraw(lockBoxID);
+        it("Check the lock box in BizNet by User", async () => {
+            const result = await bridge_biznet.connect(user_signer).checkWithdraw(lock_box_id);
             assert.strictEqual(result[0].toString(), "1");
-            assert.strictEqual(result[2].toNumber(), swapAmount);
-            assert.strictEqual(result[3].toNumber(), swapFee);
-            assert.strictEqual(result[4].toNumber(), txFee);
+            assert.strictEqual(result[2].toNumber(), swap_amount);
+            assert.strictEqual(result[3].toNumber(), swap_fee);
+            assert.strictEqual(result[4].toNumber(), tx_fee);
             assert.strictEqual(result[5].toString(), user.address);
             assert.strictEqual(result[6].toString(), user.address);
             assert.strictEqual(result[7].toString(), lock);
         });
 
-        it("Close the lock box in Luniverse by Manager", async () => {
-            expect(await bridgeLuniverse.connect(managerSigner).closeWithdraw(lockBoxID, key)).to.emit(
-                bridgeLuniverse,
+        it("Close the lock box in BizNet by Manager", async () => {
+            expect(await bridge_biznet.connect(manager_signer).closeWithdraw(lock_box_id, key)).to.emit(
+                bridge_biznet,
                 "CloseWithdraw"
             );
-            const user_balance = await tokenLuniverse.balanceOf(user.address);
-            assert.strictEqual(user_balance.toNumber(), swapAmount - totalFee);
-            const bridgeLuniverse_balance = await tokenLuniverse.balanceOf(bridgeLuniverse.address);
-            assert.strictEqual(bridgeLuniverse_balance.toNumber(), liquidityAmount - swapAmount + totalFee);
+            const user_balance = await token_biznet.balanceOf(user.address);
+            assert.strictEqual(user_balance.toNumber(), swap_amount - total_fee);
+            const bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
+            assert.strictEqual(bridge_biznet_balance.toNumber(), liquidity_amount - swap_amount + total_fee);
         });
 
-        it("Close the lock box in Ethereum by Manager", async () => {
-            const secretKey = await bridgeLuniverse.checkSecretKeyWithdraw(lockBoxID);
-            expect(await bridgeEthereum.connect(managerSigner).closeDeposit(lockBoxID, secretKey)).to.emit(
-                bridgeEthereum,
+        it("Close the lock box in EthNet by Manager", async () => {
+            const secretKey = await bridge_biznet.checkSecretKeyWithdraw(lock_box_id);
+            expect(await bridge_ethnet.connect(manager_signer).closeDeposit(lock_box_id, secretKey)).to.emit(
+                bridge_ethnet,
                 "CloseDeposit"
             );
-            const bridgeEthereum_balance = await tokenEthereum.balanceOf(bridgeEthereum.address);
-            assert.strictEqual(bridgeEthereum_balance.toNumber(), liquidityAmount + swapAmount);
+            const bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
+            assert.strictEqual(bridge_ethnet_balance.toNumber(), liquidity_amount + swap_amount);
         });
 
         it("Only the manager can open the withdraw lock box", async () => {
-            const boxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+            const box_id = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
             await assert.rejects(
-                bridgeLuniverse
-                    .connect(userSigner)
-                    .openWithdraw(boxID, swapAmount, 0, 0, user.address, user.address, lock)
+                bridge_biznet
+                    .connect(user_signer)
+                    .openWithdraw(box_id, swap_amount, 0, 0, user.address, user.address, lock)
             );
         });
 
         it("Transaction is rejected if the fee is insufficient", async () => {
-            await tokenEthereum.connect(userSigner).approve(bridgeEthereum.address, swapAmount);
+            await token_ethnet.connect(user_signer).approve(bridge_ethnet.address, swap_amount);
             await expect(
-                bridgeEthereum
-                    .connect(userSigner)
+                bridge_ethnet
+                    .connect(user_signer)
                     .openDeposit(
                         ContractUtils.BufferToString(ContractUtils.createLockBoxID()),
-                        swapAmount,
-                        swapAmount,
-                        txFee,
+                        swap_amount,
+                        swap_amount,
+                        tx_fee,
                         user.address,
                         lock
                     )
@@ -168,28 +168,28 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         const lockBox_expiry = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
 
         before("Distribute the fund", async () => {
-            await tokenEthereum.connect(adminSigner).transfer(user.address, swapAmount);
+            await token_ethnet.connect(admin_signer).transfer(user.address, swap_amount);
         });
 
         before("Set time lock", async () => {
             const timeout = 1;
-            await bridgeEthereum.connect(managerSigner).changeTimeLock(timeout);
+            await bridge_ethnet.connect(manager_signer).changeTimeLock(timeout);
         });
 
         it("Open Deposit Lock Box", async () => {
-            await tokenEthereum.connect(userSigner).approve(bridgeEthereum.address, swapAmount);
-            await bridgeEthereum.connect(userSigner).openDeposit(lockBox_expiry, swapAmount, 0, 0, user.address, lock);
+            await token_ethnet.connect(user_signer).approve(bridge_ethnet.address, swap_amount);
+            await bridge_ethnet.connect(user_signer).openDeposit(lockBox_expiry, swap_amount, 0, 0, user.address, lock);
         });
 
         it("No Expiry", async () => {
-            await assert.rejects(bridgeEthereum.connect(userSigner).expireDeposit(lockBox_expiry));
+            await assert.rejects(bridge_ethnet.connect(user_signer).expireDeposit(lockBox_expiry));
         });
 
         it("Expiry", async () => {
             await new Promise<void>((resolve, reject) =>
                 setTimeout(async () => {
                     try {
-                        await bridgeEthereum.connect(userSigner).expireDeposit(lockBox_expiry);
+                        await bridge_ethnet.connect(user_signer).expireDeposit(lockBox_expiry);
                         resolve();
                     } catch (err) {
                         reject(err);
@@ -203,29 +203,29 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         const lockBox_expiry = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
 
         before("Distribute the fund", async () => {
-            await tokenEthereum.connect(adminSigner).transfer(user.address, swapAmount);
+            await token_ethnet.connect(admin_signer).transfer(user.address, swap_amount);
         });
 
         before("Set time lock", async () => {
             const timeout = 2;
-            await bridgeEthereum.connect(managerSigner).changeTimeLock(timeout);
+            await bridge_ethnet.connect(manager_signer).changeTimeLock(timeout);
         });
 
         it("Open Withdraw Lock Box", async () => {
-            await bridgeEthereum
-                .connect(managerSigner)
-                .openWithdraw(lockBox_expiry, swapAmount, 0, 0, user.address, user.address, lock);
+            await bridge_ethnet
+                .connect(manager_signer)
+                .openWithdraw(lockBox_expiry, swap_amount, 0, 0, user.address, user.address, lock);
         });
 
         it("No Expiry", async () => {
-            await assert.rejects(bridgeEthereum.connect(managerSigner).expireWithdraw(lockBox_expiry));
+            await assert.rejects(bridge_ethnet.connect(manager_signer).expireWithdraw(lockBox_expiry));
         });
 
         it("Expiry", async () => {
             return new Promise<void>((resolve, reject) =>
                 setTimeout(async () => {
                     try {
-                        await bridgeEthereum.connect(managerSigner).expireWithdraw(lockBox_expiry);
+                        await bridge_ethnet.connect(manager_signer).expireWithdraw(lockBox_expiry);
                         resolve();
                     } catch (err) {
                         reject(err);
