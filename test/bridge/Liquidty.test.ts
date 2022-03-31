@@ -53,7 +53,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
 
             const liquid_balance = await bridge_contract
                 .connect(liquid_provider_signer)
-                .liquidBalance(liquid_provider.address);
+                .balanceOfLiquidity(liquid_provider.address);
 
             assert.strictEqual(liquid_balance.toNumber(), liquidity_amount);
             assert.strictEqual((await token_contract.balanceOf(liquid_provider.address)).toNumber(), 0);
@@ -66,7 +66,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
 
             const liquid_balance = await bridge_contract
                 .connect(liquid_provider_signer)
-                .liquidBalance(liquid_provider.address);
+                .balanceOfLiquidity(liquid_provider.address);
 
             assert.strictEqual(liquid_balance.toNumber(), 0);
             assert.strictEqual((await token_contract.balanceOf(liquid_provider.address)).toNumber(), liquidity_amount);
@@ -127,7 +127,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
 
             const liquid_balance = await bridge_contract
                 .connect(liquid_provider_signer)
-                .liquidBalance(liquid_provider.address);
+                .balanceOfLiquidity(liquid_provider.address);
 
             assert.strictEqual(liquid_balance.toNumber(), swap_amount);
         });
