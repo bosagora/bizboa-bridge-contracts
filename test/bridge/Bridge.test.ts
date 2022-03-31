@@ -15,7 +15,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
     let token_biznet: TestERC20;
 
     const provider = waffle.provider;
-    const [admin, user, manager] = provider.getWallets();
+    const [admin, user, manager, fee_manager] = provider.getWallets();
     const admin_signer = provider.getSigner(admin.address);
     const user_signer = provider.getSigner(user.address);
     const manager_signer = provider.getSigner(manager.address);
@@ -39,12 +39,16 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
 
         token_ethnet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA1");
         await token_ethnet.deployed();
-        bridge_ethnet = (await BOABridgeFactory.deploy(token_ethnet.address, time_lock)) as BOABridge;
+        bridge_ethnet = (await BOABridgeFactory.deploy(
+            token_ethnet.address,
+            time_lock,
+            fee_manager.address
+        )) as BOABridge;
         await bridge_ethnet.deployed();
 
         token_biznet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
         await token_biznet.deployed();
-        bridge_biznet = await BOABridgeFactory.deploy(token_biznet.address, time_lock);
+        bridge_biznet = await BOABridgeFactory.deploy(token_biznet.address, time_lock, fee_manager.address);
         await bridge_biznet.deployed();
     });
 
@@ -161,6 +165,13 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                         lock
                     )
             ).to.be.reverted;
+        });
+
+        it("Check the liquidity balance of manager", async () => {
+            const fee_balance_eth = await bridge_ethnet.balanceOfLiquidity(fee_manager.address);
+            assert.strictEqual(fee_balance_eth.toNumber(), total_fee);
+            const fee_balance_biz = await bridge_biznet.balanceOfLiquidity(fee_manager.address);
+            assert.strictEqual(fee_balance_biz.toNumber(), 0);
         });
     });
 
