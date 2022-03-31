@@ -10,6 +10,7 @@ import "./ManagerAccessControl.sol";
 contract BOABridge is ManagerAccessControl {
     address private swapTokenAddress;
     address private feeManagerAddress;
+    bool private collectFee;
     uint256 private depositTimeLock;
     uint256 private withdrawTimeLock;
 
@@ -17,12 +18,14 @@ contract BOABridge is ManagerAccessControl {
     constructor(
         address _tokenAddress,
         uint256 _timeLock,
-        address _feeManagerAddress
+        address _feeManagerAddress,
+        bool _collectFee
     ) {
         swapTokenAddress = _tokenAddress;
         depositTimeLock = _timeLock * 2;
         withdrawTimeLock = _timeLock;
         feeManagerAddress = _feeManagerAddress;
+        collectFee = _collectFee;
     }
 
     event ChangeTimeLock(uint256 _timeLock);
@@ -137,10 +140,12 @@ contract BOABridge is ManagerAccessControl {
         onlyOpenDepositBoxes(_boxID)
         onlyWithSecretKeyDepositBoxes(_boxID, _secretKey)
     {
-        DepositLockBox memory box = depositBoxes[_boxID];
-        uint256 totalFee = SafeMath.add(box.swapFee, box.txFee);
-        uint256 liquid = liquidBalance[feeManagerAddress];
-        liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
+        if (collectFee) {
+            DepositLockBox memory box = depositBoxes[_boxID];
+            uint256 totalFee = SafeMath.add(box.swapFee, box.txFee);
+            uint256 liquid = liquidBalance[feeManagerAddress];
+            liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
+        }
 
         // Close the box.
         depositBoxes[_boxID].secretKey = _secretKey;
@@ -304,6 +309,11 @@ contract BOABridge is ManagerAccessControl {
 
         uint256 totalFee = SafeMath.add(box.swapFee, box.txFee);
         uint256 sendAmount = SafeMath.sub(box.amount, totalFee);
+
+        if (collectFee) {
+            uint256 liquid = liquidBalance[feeManagerAddress];
+            liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
+        }
 
         IERC20 token = IERC20(swapTokenAddress);
         require(

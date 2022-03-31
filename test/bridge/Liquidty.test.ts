@@ -35,7 +35,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
         token_contract = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
         await token_contract.deployed();
 
-        bridge_contract = await BOABridgeFactory.deploy(token_contract.address, time_lock, fee_manager.address);
+        bridge_contract = await BOABridgeFactory.deploy(token_contract.address, time_lock, fee_manager.address, true);
         await bridge_contract.deployed();
     });
 
