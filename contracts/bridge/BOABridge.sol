@@ -9,14 +9,20 @@ import "./ManagerAccessControl.sol";
 
 contract BOABridge is ManagerAccessControl {
     address private swapTokenAddress;
+    address private feeManagerAddress;
     uint256 private depositTimeLock;
     uint256 private withdrawTimeLock;
 
     /// @dev Add `root` to the manager role as a member.
-    constructor(address _tokenAddress, uint256 _timeLock) {
+    constructor(
+        address _tokenAddress,
+        uint256 _timeLock,
+        address _feeManagerAddress
+    ) {
         swapTokenAddress = _tokenAddress;
         depositTimeLock = _timeLock * 2;
         withdrawTimeLock = _timeLock;
+        feeManagerAddress = _feeManagerAddress;
     }
 
     event ChangeTimeLock(uint256 _timeLock);
@@ -131,6 +137,11 @@ contract BOABridge is ManagerAccessControl {
         onlyOpenDepositBoxes(_boxID)
         onlyWithSecretKeyDepositBoxes(_boxID, _secretKey)
     {
+        DepositLockBox memory box = depositBoxes[_boxID];
+        uint256 totalFee = SafeMath.add(box.swapFee, box.txFee);
+        uint256 liquid = liquidBalance[feeManagerAddress];
+        liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
+
         // Close the box.
         depositBoxes[_boxID].secretKey = _secretKey;
         depositBoxStates[_boxID] = States.CLOSED;
@@ -413,5 +424,9 @@ contract BOABridge is ManagerAccessControl {
         liquidBalance[_provider] = liquid;
 
         emit DecreasedLiquidity(_provider, _amount);
+    }
+
+    function balanceOfLiquidity(address _provider) public view returns (uint256 amount) {
+        return liquidBalance[_provider];
     }
 }

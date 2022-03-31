@@ -13,7 +13,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
     let token_contract: TestERC20;
 
     const provider = waffle.provider;
-    const [admin, user, manager, liquidProvider] = provider.getWallets();
+    const [admin, user, manager, fee_manager, liquidProvider] = provider.getWallets();
     const admin_signer = provider.getSigner(admin.address);
     const user_signer = provider.getSigner(user.address);
     const manager_signer = provider.getSigner(manager.address);
@@ -35,7 +35,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
         token_contract = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
         await token_contract.deployed();
 
-        bridge_contract = await BOABridgeFactory.deploy(token_contract.address, time_lock);
+        bridge_contract = await BOABridgeFactory.deploy(token_contract.address, time_lock, fee_manager.address);
         await bridge_contract.deployed();
     });
 
