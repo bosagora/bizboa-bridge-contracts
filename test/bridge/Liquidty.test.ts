@@ -13,11 +13,11 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
     let token_contract: TestERC20;
 
     const provider = waffle.provider;
-    const [admin, user, manager, fee_manager, liquidProvider] = provider.getWallets();
+    const [admin, user, manager, fee_manager, liquid_provider] = provider.getWallets();
     const admin_signer = provider.getSigner(admin.address);
     const user_signer = provider.getSigner(user.address);
     const manager_signer = provider.getSigner(manager.address);
-    const liquid_provider_signer = provider.getSigner(liquidProvider.address);
+    const liquid_provider_signer = provider.getSigner(liquid_provider.address);
 
     let lock: string;
     let key: string;
@@ -40,7 +40,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
     });
 
     before("Distribute the fund", async () => {
-        await token_contract.connect(admin_signer).transfer(liquidProvider.address, liquidity_amount);
+        await token_contract.connect(admin_signer).transfer(liquid_provider.address, liquidity_amount);
         assert.strictEqual((await token_contract.balanceOf(bridge_contract.address)).toNumber(), 0);
     });
 
@@ -49,27 +49,27 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
             await token_contract.connect(liquid_provider_signer).approve(bridge_contract.address, liquidity_amount);
             await bridge_contract
                 .connect(liquid_provider_signer)
-                .increaseLiquidity(liquidProvider.address, liquidity_amount);
+                .increaseLiquidity(liquid_provider.address, liquidity_amount);
 
             const liquid_balance = await bridge_contract
                 .connect(liquid_provider_signer)
-                .liquidBalance(liquidProvider.address);
+                .liquidBalance(liquid_provider.address);
 
             assert.strictEqual(liquid_balance.toNumber(), liquidity_amount);
-            assert.strictEqual((await token_contract.balanceOf(liquidProvider.address)).toNumber(), 0);
+            assert.strictEqual((await token_contract.balanceOf(liquid_provider.address)).toNumber(), 0);
         });
 
         it("Decrease liquidity", async () => {
             await bridge_contract
                 .connect(liquid_provider_signer)
-                .decreaseLiquidity(liquidProvider.address, liquidity_amount);
+                .decreaseLiquidity(liquid_provider.address, liquidity_amount);
 
             const liquid_balance = await bridge_contract
                 .connect(liquid_provider_signer)
-                .liquidBalance(liquidProvider.address);
+                .liquidBalance(liquid_provider.address);
 
             assert.strictEqual(liquid_balance.toNumber(), 0);
-            assert.strictEqual((await token_contract.balanceOf(liquidProvider.address)).toNumber(), liquidity_amount);
+            assert.strictEqual((await token_contract.balanceOf(liquid_provider.address)).toNumber(), liquidity_amount);
         });
     });
 
@@ -78,7 +78,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
             await token_contract.connect(liquid_provider_signer).approve(bridge_contract.address, liquidity_amount);
             await bridge_contract
                 .connect(liquid_provider_signer)
-                .increaseLiquidity(liquidProvider.address, liquidity_amount);
+                .increaseLiquidity(liquid_provider.address, liquidity_amount);
         });
 
         it("Add a manager", async () => {
@@ -116,18 +116,18 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
             await assert.rejects(
                 bridge_contract
                     .connect(liquid_provider_signer)
-                    .decreaseLiquidity(liquidProvider.address, liquidity_amount)
+                    .decreaseLiquidity(liquid_provider.address, liquidity_amount)
             );
         });
 
         it("Decrease some of the liquidity", async () => {
             await bridge_contract
                 .connect(liquid_provider_signer)
-                .decreaseLiquidity(liquidProvider.address, liquidity_amount - swap_amount);
+                .decreaseLiquidity(liquid_provider.address, liquidity_amount - swap_amount);
 
             const liquid_balance = await bridge_contract
                 .connect(liquid_provider_signer)
-                .liquidBalance(liquidProvider.address);
+                .liquidBalance(liquid_provider.address);
 
             assert.strictEqual(liquid_balance.toNumber(), swap_amount);
         });
