@@ -1,6 +1,7 @@
 import assert from "assert";
 import { expect } from "chai";
 import { ethers, waffle } from "hardhat";
+// @ts-ignore
 import { MetaSwap, TestERC20 } from "../../typechain";
 import { BOA, ContractUtils } from "../ContractUtils";
 
@@ -10,8 +11,6 @@ describe("Test of MetaSwap Contract", () => {
     let depositLockBoxID: string;
     let withdrawLockBoxID: string;
     let withdrawLockBoxID2: string;
-    let depositOrderIdentifier: string;
-    let withdrawOrderIdentifier: string;
 
     const provider = waffle.provider;
     const [owner, manager, user01, user02] = provider.getWallets();
@@ -39,8 +38,6 @@ describe("Test of MetaSwap Contract", () => {
         depositLockBoxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
         withdrawLockBoxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
         withdrawLockBoxID2 = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
-        depositOrderIdentifier = "4ceb87ce-d521-41a3-a5bb-7944fc8b9fbc";
-        withdrawOrderIdentifier = "a0265cc6-4a72-4240-86dd-c875e9bf971b";
     });
 
     it("Check the game token status", async () => {
@@ -93,15 +90,12 @@ describe("Test of MetaSwap Contract", () => {
     });
 
     it("Close the withdraw lock box", async () => {
-        await expect(metaSwap.connect(user01Signer).closeDepositToken2Point(withdrawLockBoxID, withdrawOrderIdentifier))
-            .to.be.reverted;
-        await expect(metaSwap.connect(user02Signer).closeDepositToken2Point(withdrawLockBoxID, withdrawOrderIdentifier))
-            .to.be.reverted;
-        await expect(
-            metaSwap
-                .connect(managerSigner)
-                .closeWithdrawPoint2Token(withdrawLockBoxID, withdrawOrderIdentifier, token_price)
-        ).to.emit(metaSwap, "CloseWithdraw");
+        await expect(metaSwap.connect(user01Signer).closeDepositToken2Point(withdrawLockBoxID)).to.be.reverted;
+        await expect(metaSwap.connect(user02Signer).closeDepositToken2Point(withdrawLockBoxID)).to.be.reverted;
+        await expect(metaSwap.connect(managerSigner).closeWithdrawPoint2Token(withdrawLockBoxID, token_price)).to.emit(
+            metaSwap,
+            "CloseWithdraw"
+        );
 
         expect(await bizToken.connect(user01Signer).balanceOf(user01.address)).to.equal(BOA(swap_point / token_price));
     });
@@ -111,8 +105,7 @@ describe("Test of MetaSwap Contract", () => {
         assert.strictEqual(result[0].toString(), "2");
         assert.strictEqual(result[1].toString(), user01.address);
         assert.strictEqual(result[2].toNumber(), swap_point);
-        assert.strictEqual(result[3].toString(), withdrawOrderIdentifier);
-        assert.strictEqual(result[5].toString(), BOA(swap_point / token_price).toString());
+        assert.strictEqual(result[4].toString(), BOA(swap_point / token_price).toString());
     });
 
     it("Open deposit lock box to swap tokens for points.", async () => {
@@ -138,13 +131,12 @@ describe("Test of MetaSwap Contract", () => {
     });
 
     it("Close the deposit lock box", async () => {
-        await expect(metaSwap.connect(user01Signer).closeDepositToken2Point(depositLockBoxID, depositOrderIdentifier))
-            .to.be.reverted;
-        await expect(metaSwap.connect(user02Signer).closeDepositToken2Point(depositLockBoxID, depositOrderIdentifier))
-            .to.be.reverted;
-        await expect(
-            metaSwap.connect(managerSigner).closeDepositToken2Point(depositLockBoxID, depositOrderIdentifier)
-        ).to.emit(metaSwap, "CloseDeposit");
+        await expect(metaSwap.connect(user01Signer).closeDepositToken2Point(depositLockBoxID)).to.be.reverted;
+        await expect(metaSwap.connect(user02Signer).closeDepositToken2Point(depositLockBoxID)).to.be.reverted;
+        await expect(metaSwap.connect(managerSigner).closeDepositToken2Point(depositLockBoxID)).to.emit(
+            metaSwap,
+            "CloseDeposit"
+        );
 
         expect(await bizToken.connect(user01Signer).balanceOf(user01.address)).to.equal(0);
     });
@@ -154,7 +146,6 @@ describe("Test of MetaSwap Contract", () => {
         assert.strictEqual(result[0].toString(), "2");
         assert.strictEqual(result[1].toString(), user01.address);
         assert.strictEqual(result[2].toNumber(), swap_boa.toNumber());
-        assert.strictEqual(result[3].toString(), depositOrderIdentifier);
     });
 
     it("Check the over liquidity withdraw", async () => {
