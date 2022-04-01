@@ -28,7 +28,6 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         uint256 amount;
         uint256 withdraw_amount;
         uint256 createTimestamp;
-        string orderIdentifier;
     }
 
     event OpenDeposit(bytes32 boxID, address requestor, uint256 amount);
@@ -75,8 +74,7 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
             amount: _amount,
             withdraw_amount: 0,
             traderAddress: msg.sender,
-            createTimestamp: block.timestamp,
-            orderIdentifier: ""
+            createTimestamp: block.timestamp
         });
 
         depositBoxes[_boxID] = box;
@@ -84,13 +82,12 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         emit OpenDeposit(_boxID, msg.sender, _amount);
     }
 
-    function closeDepositToken2Point(bytes32 _boxID, string memory _orderIdentifier)
+    function closeDepositToken2Point(bytes32 _boxID)
         public
         onlyRole(MANAGER_ROLE)
         onlyOpenDepositBoxes(_boxID)
         whenNotPaused
     {
-        depositBoxes[_boxID].orderIdentifier = _orderIdentifier;
         depositBoxStates[_boxID] = States.CLOSED;
         LockBox memory box = depositBoxes[_boxID];
         emit CloseDeposit(_boxID, box.traderAddress, box.amount);
@@ -103,13 +100,12 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
             States states,
             address traderAddress,
             uint256 amount,
-            string memory orderIdentifier,
             uint256 createTimestamp
         )
     {
         LockBox memory box = depositBoxes[_boxID];
         States state = depositBoxStates[_boxID];
-        return (state, box.traderAddress, box.amount, box.orderIdentifier, box.createTimestamp);
+        return (state, box.traderAddress, box.amount, box.createTimestamp);
     }
 
     event OpenWithdraw(bytes32 boxID, address requestor, uint256 amount);
@@ -148,8 +144,7 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
             amount: _amount,
             withdraw_amount: token_amount,
             traderAddress: _beneficiary,
-            createTimestamp: block.timestamp,
-            orderIdentifier: ""
+            createTimestamp: block.timestamp
         });
 
         withdrawBoxes[_boxID] = box;
@@ -157,11 +152,12 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         emit OpenWithdraw(_boxID, _beneficiary, _amount);
     }
 
-    function closeWithdrawPoint2Token(
-        bytes32 _boxID,
-        string memory _orderIdentifier,
-        uint256 token_price
-    ) public onlyRole(MANAGER_ROLE) onlyOpenWithdrawBoxes(_boxID) whenNotPaused {
+    function closeWithdrawPoint2Token(bytes32 _boxID, uint256 token_price)
+        public
+        onlyRole(MANAGER_ROLE)
+        onlyOpenWithdrawBoxes(_boxID)
+        whenNotPaused
+    {
         require(token_price != 0, "The token price was entered incorrectly.|INCORRECT_TOKEN_PRICE");
 
         IERC20 token = IERC20(swapTokenAddress);
@@ -181,7 +177,6 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         );
 
         withdrawBoxes[_boxID].withdraw_amount = token_amount;
-        withdrawBoxes[_boxID].orderIdentifier = _orderIdentifier;
         withdrawBoxStates[_boxID] = States.CLOSED;
 
         emit CloseWithdraw(_boxID, box.traderAddress, token_amount);
@@ -194,14 +189,13 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
             States states,
             address traderAddress,
             uint256 amount,
-            string memory orderIdentifier,
             uint256 createTimestamp,
             uint256 withdraw_amount
         )
     {
         LockBox memory box = withdrawBoxes[_boxID];
         States state = withdrawBoxStates[_boxID];
-        return (state, box.traderAddress, box.amount, box.orderIdentifier, box.createTimestamp, box.withdraw_amount);
+        return (state, box.traderAddress, box.amount, box.createTimestamp, box.withdraw_amount);
     }
 
     mapping(address => uint256) public liquidBalance;
