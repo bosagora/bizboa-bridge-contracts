@@ -2,8 +2,8 @@ import chai, { expect } from "chai";
 import { solidity } from "ethereum-waffle";
 import { BigNumber } from "ethers";
 import { ethers, waffle } from "hardhat";
-import { BOATokenBridge, TestERC20 } from "../../typechain";
-import { ContractUtils } from "../ContractUtils";
+import { BOACoinBridge, BOATokenBridge, TestERC20 } from "../../typechain";
+import { BOAToken, ContractUtils, convertBOAToken2Coin } from "../ContractUtils";
 
 import * as assert from "assert";
 
@@ -12,13 +12,13 @@ chai.use(solidity);
 describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
     let bridge_ethnet: BOATokenBridge;
     let token_ethnet: TestERC20;
-    let bridge_biznet: BOATokenBridge;
-    let token_biznet: TestERC20;
+    let bridge_biznet: BOACoinBridge;
 
     const provider = waffle.provider;
-    const [admin, user, manager, fee_manager] = provider.getWallets();
+    const [admin, _user, manager, fee_manager, user_eth, user_biz] = provider.getWallets();
     const admin_signer = provider.getSigner(admin.address);
-    const user_signer = provider.getSigner(user.address);
+    const user_eth_signer = provider.getSigner(user_eth.address);
+    const user_biz_signer = provider.getSigner(user_biz.address);
     const manager_signer = provider.getSigner(manager.address);
 
     let lock: string;
@@ -26,21 +26,29 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
 
     let lock_box_id: string;
 
-    const liquidity_amount = 1000000;
-    const swap_amount = 10000;
+    const liquidity_amount_token = BOAToken(1000000);
+    const swap_amount_token = BOAToken(10000);
     const time_lock = 60 * 60 * 24;
 
-    const swap_fee = 100;
-    const tx_fee = 200;
-    const total_fee = swap_fee + tx_fee;
+    const swap_fee_token = BOAToken(100);
+    const tx_fee_token = BOAToken(200);
+    const total_fee_token = swap_fee_token.add(tx_fee_token);
+
+    const liquidity_amount_coin = convertBOAToken2Coin(liquidity_amount_token);
+    const swap_amount_coin = convertBOAToken2Coin(swap_amount_token);
+    const swap_fee_coin = convertBOAToken2Coin(swap_fee_token);
+    const tx_fee_coin = convertBOAToken2Coin(tx_fee_token);
+    const total_fee_coin = convertBOAToken2Coin(total_fee_token);
 
     before(async () => {
-        const BOABridgeFactory = await ethers.getContractFactory("BOATokenBridge");
+        const BOACoinBridgeFactory = await ethers.getContractFactory("BOACoinBridge");
+        const BOATokenBridgeFactory = await ethers.getContractFactory("BOATokenBridge");
         const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
         token_ethnet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA1");
         await token_ethnet.deployed();
-        bridge_ethnet = (await BOABridgeFactory.deploy(
+
+        bridge_ethnet = (await BOATokenBridgeFactory.deploy(
             token_ethnet.address,
             time_lock,
             fee_manager.address,
@@ -48,17 +56,16 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         )) as BOATokenBridge;
         await bridge_ethnet.deployed();
 
-        token_biznet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");
-        await token_biznet.deployed();
-        bridge_biznet = await BOABridgeFactory.deploy(token_biznet.address, time_lock, fee_manager.address, false);
+        bridge_biznet = (await BOACoinBridgeFactory.deploy(time_lock, fee_manager.address, false)) as BOACoinBridge;
         await bridge_biznet.deployed();
     });
 
     before("Send liquidity", async () => {
-        await token_ethnet.connect(admin_signer).approve(bridge_ethnet.address, liquidity_amount);
-        await bridge_ethnet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount);
-        await token_biznet.connect(admin_signer).approve(bridge_biznet.address, liquidity_amount);
-        await bridge_biznet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount);
+        await token_ethnet.connect(admin_signer).approve(bridge_ethnet.address, liquidity_amount_token);
+        await bridge_ethnet.connect(admin_signer).increaseLiquidity(admin.address, liquidity_amount_token);
+        await bridge_biznet
+            .connect(admin_signer)
+            .increaseLiquidity({ from: admin.address, value: liquidity_amount_coin });
     });
 
     before("Add a manager", async () => {
@@ -73,17 +80,17 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         let old_bridge_biznet_balance: BigNumber;
 
         before("Distribute the fund", async () => {
-            await token_ethnet.connect(admin_signer).transfer(user.address, swap_amount);
+            await token_ethnet.connect(admin_signer).transfer(user_eth.address, swap_amount_token);
         });
 
         it("Check the balance", async () => {
-            old_user_balance_ethnet = await token_ethnet.balanceOf(user.address);
-            old_user_balance_biznet = await token_biznet.balanceOf(user.address);
+            old_user_balance_ethnet = await token_ethnet.balanceOf(user_eth.address);
+            old_user_balance_biznet = await provider.getBalance(user_biz.address);
             old_bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
-            old_bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
+            old_bridge_biznet_balance = await provider.getBalance(bridge_biznet.address);
         });
 
-        it("Create key by User", () => {
+        it("Create key by User", async () => {
             const key_buffer = ContractUtils.createKey();
             const lock_buffer = ContractUtils.sha256(key_buffer);
             key = ContractUtils.BufferToString(key_buffer);
@@ -92,22 +99,22 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         });
 
         it("Open the lock box in EthNet by User", async () => {
-            await token_ethnet.connect(user_signer).approve(bridge_ethnet.address, swap_amount);
+            await token_ethnet.connect(user_eth_signer).approve(bridge_ethnet.address, swap_amount_token);
             expect(
                 await bridge_ethnet
-                    .connect(user_signer)
-                    .openDeposit(lock_box_id, swap_amount, swap_fee, tx_fee, user.address, lock)
+                    .connect(user_eth_signer)
+                    .openDeposit(lock_box_id, swap_amount_token, swap_fee_token, tx_fee_token, user_biz.address, lock)
             ).to.emit(bridge_ethnet, "OpenDeposit");
         });
 
         it("Check the lock box in EthNet by Manager", async () => {
             const result = await bridge_ethnet.checkDeposit(lock_box_id);
             assert.strictEqual(result[0].toString(), "1");
-            assert.strictEqual(result[2].toNumber(), swap_amount);
-            assert.strictEqual(result[3].toNumber(), swap_fee);
-            assert.strictEqual(result[4].toNumber(), tx_fee);
-            assert.strictEqual(result[5].toString(), user.address);
-            assert.strictEqual(result[6].toString(), user.address);
+            assert.strictEqual(result[2].toString(), swap_amount_token.toString());
+            assert.strictEqual(result[3].toString(), swap_fee_token.toString());
+            assert.strictEqual(result[4].toString(), tx_fee_token.toString());
+            assert.strictEqual(result[5].toString(), user_eth.address);
+            assert.strictEqual(result[6].toString(), user_biz.address);
             assert.strictEqual(result[7].toString(), lock);
         });
 
@@ -115,18 +122,26 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
             expect(
                 await bridge_biznet
                     .connect(manager_signer)
-                    .openWithdraw(lock_box_id, swap_amount, swap_fee, tx_fee, user.address, user.address, lock)
+                    .openWithdraw(
+                        lock_box_id,
+                        swap_amount_coin,
+                        swap_fee_coin,
+                        tx_fee_coin,
+                        user_eth.address,
+                        user_biz.address,
+                        lock
+                    )
             ).to.emit(bridge_biznet, "OpenWithdraw");
         });
 
         it("Check the lock box in BizNet by User", async () => {
-            const result = await bridge_biznet.connect(user_signer).checkWithdraw(lock_box_id);
+            const result = await bridge_biznet.connect(user_biz_signer).checkWithdraw(lock_box_id);
             assert.strictEqual(result[0].toString(), "1");
-            assert.strictEqual(result[2].toNumber(), swap_amount);
-            assert.strictEqual(result[3].toNumber(), swap_fee);
-            assert.strictEqual(result[4].toNumber(), tx_fee);
-            assert.strictEqual(result[5].toString(), user.address);
-            assert.strictEqual(result[6].toString(), user.address);
+            assert.strictEqual(result[2].toString(), swap_amount_coin.toString());
+            assert.strictEqual(result[3].toString(), swap_fee_coin.toString());
+            assert.strictEqual(result[4].toString(), tx_fee_coin.toString());
+            assert.strictEqual(result[5].toString(), user_eth.address);
+            assert.strictEqual(result[6].toString(), user_biz.address);
             assert.strictEqual(result[7].toString(), lock);
         });
 
@@ -135,15 +150,15 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                 bridge_biznet,
                 "CloseWithdraw"
             );
-            const user_balance_biznet = await token_biznet.balanceOf(user.address);
+            const user_balance_biznet = await provider.getBalance(user_biz.address);
             assert.strictEqual(
-                user_balance_biznet.toNumber() - old_user_balance_biznet.toNumber(),
-                swap_amount - total_fee
+                user_balance_biznet.sub(old_user_balance_biznet).toString(),
+                swap_amount_coin.sub(total_fee_coin).toString()
             );
-            const bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
+            const bridge_biznet_balance = await provider.getBalance(bridge_biznet.address);
             assert.strictEqual(
-                bridge_biznet_balance.toNumber(),
-                old_bridge_biznet_balance.toNumber() - swap_amount + total_fee
+                bridge_biznet_balance.toString(),
+                old_bridge_biznet_balance.sub(swap_amount_coin).add(total_fee_coin).toString()
             );
         });
 
@@ -154,29 +169,32 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                 "CloseDeposit"
             );
             const bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
-            assert.strictEqual(bridge_ethnet_balance.toNumber(), old_bridge_ethnet_balance.toNumber() + swap_amount);
+            assert.strictEqual(
+                bridge_ethnet_balance.toString(),
+                old_bridge_ethnet_balance.add(swap_amount_token).toString()
+            );
         });
 
         it("Only the manager can open the withdraw lock box", async () => {
             const box_id = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
             await assert.rejects(
                 bridge_biznet
-                    .connect(user_signer)
-                    .openWithdraw(box_id, swap_amount, 0, 0, user.address, user.address, lock)
+                    .connect(user_biz_signer)
+                    .openWithdraw(box_id, swap_amount_token, 0, 0, user_eth.address, user_biz.address, lock)
             );
         });
 
         it("Transaction is rejected if the fee is insufficient", async () => {
-            await token_ethnet.connect(user_signer).approve(bridge_ethnet.address, swap_amount);
+            await token_ethnet.connect(user_eth_signer).approve(bridge_ethnet.address, swap_amount_token);
             await expect(
                 bridge_ethnet
-                    .connect(user_signer)
+                    .connect(user_eth_signer)
                     .openDeposit(
                         ContractUtils.BufferToString(ContractUtils.createLockBoxID()),
-                        swap_amount,
-                        swap_amount,
-                        tx_fee,
-                        user.address,
+                        swap_amount_token,
+                        swap_amount_token,
+                        tx_fee_token,
+                        user_biz.address,
                         lock
                     )
             ).to.be.reverted;
@@ -185,9 +203,9 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         // 수수료는 이더넷의 브리지에서만 모아집니다.
         it("Check the liquidity balance of manager", async () => {
             const fee_balance_eth = await bridge_ethnet.balanceOfLiquidity(fee_manager.address);
-            assert.strictEqual(fee_balance_eth.toNumber(), total_fee);
+            assert.strictEqual(fee_balance_eth.toString(), total_fee_token.toString());
             const fee_balance_biz = await bridge_biznet.balanceOfLiquidity(fee_manager.address);
-            assert.strictEqual(fee_balance_biz.toNumber(), 0);
+            assert.strictEqual(fee_balance_biz.toString(), "0");
         });
     });
 
@@ -198,14 +216,14 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         let old_bridge_biznet_balance: BigNumber;
 
         before("Distribute the fund", async () => {
-            await token_biznet.connect(admin_signer).transfer(user.address, swap_amount);
+            // await token_biznet.connect(admin_signer).transfer(user.address, swap_amount_token);
         });
 
         it("Check the balance", async () => {
-            old_user_balance_ethnet = await token_ethnet.balanceOf(user.address);
-            old_user_balance_biznet = await token_biznet.balanceOf(user.address);
+            old_user_balance_ethnet = await token_ethnet.balanceOf(user_eth.address);
+            old_user_balance_biznet = await user_biz.getBalance();
             old_bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
-            old_bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
+            old_bridge_biznet_balance = await provider.getBalance(bridge_biznet.address);
         });
 
         it("Create key by User", () => {
@@ -217,22 +235,24 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         });
 
         it("Open the lock box in BizNet by User", async () => {
-            await token_biznet.connect(user_signer).approve(bridge_biznet.address, swap_amount);
             expect(
                 await bridge_biznet
-                    .connect(user_signer)
-                    .openDeposit(lock_box_id, swap_amount, swap_fee, tx_fee, user.address, lock)
+                    .connect(user_biz_signer)
+                    .openDeposit(lock_box_id, swap_fee_coin, tx_fee_coin, user_eth.address, lock, {
+                        from: user_biz.address,
+                        value: swap_amount_coin,
+                    })
             ).to.emit(bridge_biznet, "OpenDeposit");
         });
 
         it("Check the lock box in BizNet by Manager", async () => {
             const result = await bridge_biznet.checkDeposit(lock_box_id);
             assert.strictEqual(result[0].toString(), "1");
-            assert.strictEqual(result[2].toNumber(), swap_amount);
-            assert.strictEqual(result[3].toNumber(), swap_fee);
-            assert.strictEqual(result[4].toNumber(), tx_fee);
-            assert.strictEqual(result[5].toString(), user.address);
-            assert.strictEqual(result[6].toString(), user.address);
+            assert.strictEqual(result[2].toString(), swap_amount_coin.toString());
+            assert.strictEqual(result[3].toString(), swap_fee_coin.toString());
+            assert.strictEqual(result[4].toString(), tx_fee_coin.toString());
+            assert.strictEqual(result[5].toString(), user_biz.address);
+            assert.strictEqual(result[6].toString(), user_eth.address);
             assert.strictEqual(result[7].toString(), lock);
         });
 
@@ -240,18 +260,26 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
             expect(
                 await bridge_ethnet
                     .connect(manager_signer)
-                    .openWithdraw(lock_box_id, swap_amount, swap_fee, tx_fee, user.address, user.address, lock)
+                    .openWithdraw(
+                        lock_box_id,
+                        swap_amount_token,
+                        swap_fee_token,
+                        tx_fee_token,
+                        user_biz.address,
+                        user_eth.address,
+                        lock
+                    )
             ).to.emit(bridge_ethnet, "OpenWithdraw");
         });
 
         it("Check the lock box in BizNet by User", async () => {
-            const result = await bridge_ethnet.connect(user_signer).checkWithdraw(lock_box_id);
+            const result = await bridge_ethnet.connect(user_eth_signer).checkWithdraw(lock_box_id);
             assert.strictEqual(result[0].toString(), "1");
-            assert.strictEqual(result[2].toNumber(), swap_amount);
-            assert.strictEqual(result[3].toNumber(), swap_fee);
-            assert.strictEqual(result[4].toNumber(), tx_fee);
-            assert.strictEqual(result[5].toString(), user.address);
-            assert.strictEqual(result[6].toString(), user.address);
+            assert.strictEqual(result[2].toString(), swap_amount_token.toString());
+            assert.strictEqual(result[3].toString(), swap_fee_token.toString());
+            assert.strictEqual(result[4].toString(), tx_fee_token.toString());
+            assert.strictEqual(result[5].toString(), user_biz.address);
+            assert.strictEqual(result[6].toString(), user_eth.address);
             assert.strictEqual(result[7].toString(), lock);
         });
 
@@ -260,15 +288,15 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                 bridge_ethnet,
                 "CloseWithdraw"
             );
-            const new_user_balance_ethnet = await token_ethnet.balanceOf(user.address);
+            const new_user_balance_ethnet = await token_ethnet.balanceOf(user_eth.address);
             assert.strictEqual(
-                new_user_balance_ethnet.toNumber() - old_user_balance_ethnet.toNumber(),
-                swap_amount - total_fee
+                new_user_balance_ethnet.sub(old_user_balance_ethnet).toString(),
+                swap_amount_token.sub(total_fee_token).toString()
             );
             const bridge_ethnet_balance = await token_ethnet.balanceOf(bridge_ethnet.address);
             assert.strictEqual(
-                bridge_ethnet_balance.toNumber(),
-                old_bridge_ethnet_balance.toNumber() - swap_amount + total_fee
+                bridge_ethnet_balance.toString(),
+                old_bridge_ethnet_balance.sub(swap_amount_token).add(total_fee_token).toString()
             );
         });
 
@@ -278,16 +306,19 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                 bridge_biznet,
                 "CloseDeposit"
             );
-            const bridge_biznet_balance = await token_biznet.balanceOf(bridge_biznet.address);
-            assert.strictEqual(bridge_biznet_balance.toNumber(), old_bridge_biznet_balance.toNumber() + swap_amount);
+            const bridge_biznet_balance = await provider.getBalance(bridge_biznet.address);
+            assert.strictEqual(
+                bridge_biznet_balance.toString(),
+                old_bridge_biznet_balance.add(swap_amount_coin).toString()
+            );
         });
 
         // 수수료는 이더넷의 브리지에서만 모아집니다.
         it("Check the liquidity balance of manager", async () => {
             const fee_balance_eth = await bridge_ethnet.balanceOfLiquidity(fee_manager.address);
-            assert.strictEqual(fee_balance_eth.toNumber(), total_fee * 2);
+            assert.strictEqual(fee_balance_eth.toString(), total_fee_token.mul(2).toString());
             const fee_balance_biz = await bridge_biznet.balanceOfLiquidity(fee_manager.address);
-            assert.strictEqual(fee_balance_biz.toNumber(), 0);
+            assert.strictEqual(fee_balance_biz.toString(), "0");
         });
     });
 
@@ -295,7 +326,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         const lockBox_expiry = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
 
         before("Distribute the fund", async () => {
-            await token_ethnet.connect(admin_signer).transfer(user.address, swap_amount);
+            await token_ethnet.connect(admin_signer).transfer(user_eth.address, swap_amount_token);
         });
 
         before("Set time lock", async () => {
@@ -304,19 +335,21 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         });
 
         it("Open Deposit Lock Box", async () => {
-            await token_ethnet.connect(user_signer).approve(bridge_ethnet.address, swap_amount);
-            await bridge_ethnet.connect(user_signer).openDeposit(lockBox_expiry, swap_amount, 0, 0, user.address, lock);
+            await token_ethnet.connect(user_eth_signer).approve(bridge_ethnet.address, swap_amount_token);
+            await bridge_ethnet
+                .connect(user_eth_signer)
+                .openDeposit(lockBox_expiry, swap_amount_token, 0, 0, user_biz.address, lock);
         });
 
         it("No Expiry", async () => {
-            await assert.rejects(bridge_ethnet.connect(user_signer).expireDeposit(lockBox_expiry));
+            await assert.rejects(bridge_ethnet.connect(user_eth_signer).expireDeposit(lockBox_expiry));
         });
 
         it("Expiry", async () => {
             await new Promise<void>((resolve, reject) =>
                 setTimeout(async () => {
                     try {
-                        await bridge_ethnet.connect(user_signer).expireDeposit(lockBox_expiry);
+                        await bridge_ethnet.connect(user_eth_signer).expireDeposit(lockBox_expiry);
                         resolve();
                     } catch (err) {
                         reject(err);
@@ -330,7 +363,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         const lockBox_expiry = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
 
         before("Distribute the fund", async () => {
-            await token_ethnet.connect(admin_signer).transfer(user.address, swap_amount);
+            await token_ethnet.connect(admin_signer).transfer(user_eth.address, swap_amount_token);
         });
 
         before("Set time lock", async () => {
@@ -341,7 +374,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         it("Open Withdraw Lock Box", async () => {
             await bridge_ethnet
                 .connect(manager_signer)
-                .openWithdraw(lockBox_expiry, swap_amount, 0, 0, user.address, user.address, lock);
+                .openWithdraw(lockBox_expiry, swap_amount_token, 0, 0, user_eth.address, user_biz.address, lock);
         });
 
         it("No Expiry", async () => {
