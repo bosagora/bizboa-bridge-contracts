@@ -2,7 +2,7 @@ import chai, { expect } from "chai";
 import { solidity } from "ethereum-waffle";
 import { BigNumber } from "ethers";
 import { ethers, waffle } from "hardhat";
-import { BOABridge, TestERC20 } from "../../typechain";
+import { BOATokenBridge, TestERC20 } from "../../typechain";
 import { ContractUtils } from "../ContractUtils";
 
 import * as assert from "assert";
@@ -10,9 +10,9 @@ import * as assert from "assert";
 chai.use(solidity);
 
 describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
-    let bridge_ethnet: BOABridge;
+    let bridge_ethnet: BOATokenBridge;
     let token_ethnet: TestERC20;
-    let bridge_biznet: BOABridge;
+    let bridge_biznet: BOATokenBridge;
     let token_biznet: TestERC20;
 
     const provider = waffle.provider;
@@ -35,7 +35,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
     const total_fee = swap_fee + tx_fee;
 
     before(async () => {
-        const BOABridgeFactory = await ethers.getContractFactory("BOABridge");
+        const BOABridgeFactory = await ethers.getContractFactory("BOATokenBridge");
         const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
         token_ethnet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA1");
@@ -45,7 +45,7 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
             time_lock,
             fee_manager.address,
             true // 수수료는 이더넷의 브리지에서만 모아집니다.
-        )) as BOABridge;
+        )) as BOATokenBridge;
         await bridge_ethnet.deployed();
 
         token_biznet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");

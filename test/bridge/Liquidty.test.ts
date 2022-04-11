@@ -1,7 +1,7 @@
 import chai, { expect } from "chai";
 import { solidity } from "ethereum-waffle";
 import { ethers, waffle } from "hardhat";
-import { BOABridge, TestERC20 } from "../../typechain";
+import { BOATokenBridge, TestERC20 } from "../../typechain";
 import { ContractUtils } from "../ContractUtils";
 
 import * as assert from "assert";
@@ -9,7 +9,7 @@ import * as assert from "assert";
 chai.use(solidity);
 
 describe("Test of Increase Liquidity & Decrease Liquidity", () => {
-    let bridge_contract: BOABridge;
+    let bridge_contract: BOATokenBridge;
     let token_contract: TestERC20;
 
     const provider = waffle.provider;
@@ -29,7 +29,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity", () => {
     const time_lock = 60 * 60 * 24;
 
     before(async () => {
-        const BOABridgeFactory = await ethers.getContractFactory("BOABridge");
+        const BOABridgeFactory = await ethers.getContractFactory("BOATokenBridge");
         const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
         token_contract = await TestERC20Factory.deploy("BOSAGORA Token", "BOA2");

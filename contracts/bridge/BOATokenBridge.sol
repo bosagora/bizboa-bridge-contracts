@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./ManagerAccessControl.sol";
 
-contract BOABridge is ManagerAccessControl {
+contract BOATokenBridge is ManagerAccessControl {
     address private swapTokenAddress;
     address private feeManagerAddress;
     bool private collectFee;
