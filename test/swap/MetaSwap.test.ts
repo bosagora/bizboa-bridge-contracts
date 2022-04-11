@@ -3,7 +3,7 @@ import { expect } from "chai";
 import { ethers, waffle } from "hardhat";
 // @ts-ignore
 import { MetaSwap, TestERC20 } from "../../typechain";
-import { BOA, ContractUtils } from "../ContractUtils";
+import { BOAToken, ContractUtils } from "../ContractUtils";
 
 describe("Test of MetaSwap Contract", () => {
     let bizToken: TestERC20;
@@ -19,11 +19,11 @@ describe("Test of MetaSwap Contract", () => {
     const user01Signer = provider.getSigner(user01.address);
     const user02Signer = provider.getSigner(user02.address);
 
-    const liquidityAmount = BOA(1000000);
+    const liquidityAmount = BOAToken(1000000);
     const token_price = 100;
     const swap_point = 200;
-    const swap_boa = BOA(swap_point / token_price);
-    const boa_unit = BOA(1);
+    const swap_boa = BOAToken(swap_point / token_price);
+    const boa_unit = BOAToken(1);
 
     before(async () => {
         const erc20 = await ethers.getContractFactory("TestERC20");
@@ -97,7 +97,9 @@ describe("Test of MetaSwap Contract", () => {
             "CloseWithdraw"
         );
 
-        expect(await bizToken.connect(user01Signer).balanceOf(user01.address)).to.equal(BOA(swap_point / token_price));
+        expect(await bizToken.connect(user01Signer).balanceOf(user01.address)).to.equal(
+            BOAToken(swap_point / token_price)
+        );
     });
 
     it("Check the close withdraw lock box", async () => {
@@ -105,7 +107,7 @@ describe("Test of MetaSwap Contract", () => {
         assert.strictEqual(result[0].toString(), "2");
         assert.strictEqual(result[1].toString(), user01.address);
         assert.strictEqual(result[2].toNumber(), swap_point);
-        assert.strictEqual(result[4].toString(), BOA(swap_point / token_price).toString());
+        assert.strictEqual(result[4].toString(), BOAToken(swap_point / token_price).toString());
     });
 
     it("Open deposit lock box to swap tokens for points.", async () => {
