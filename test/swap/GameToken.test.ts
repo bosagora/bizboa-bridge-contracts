@@ -15,7 +15,7 @@ describe("Test of GameToken", () => {
 
     before(async () => {
         const GameToken = await ethers.getContractFactory("GameToken");
-        gameToken = await GameToken.deploy();
+        gameToken = await GameToken.deploy("BOSAGORA", "GBOA", 7, 1000000000000000);
         await gameToken.deployed();
     });
 

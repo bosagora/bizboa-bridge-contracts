@@ -7,15 +7,21 @@ import "./access/ManagerControl.sol";
 import "./access/MinterControl.sol";
 
 contract GameToken is ERC20, ManagerControl, MinterControl {
-    uint8 public constant DECIMALS = 7;
-    uint256 public constant INITIAL_SUPPLY = 1000000000000000;
+    uint8 private _decimal;
 
-    constructor() ERC20("BOSAGORA", "GBOA") {
-        _mint(_msgSender(), INITIAL_SUPPLY);
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        uint8 decimal_,
+        uint256 initial_supply_
+    ) ERC20(name_, symbol_) {
+        require(decimal_ <= 18, "Decimal is greater than the maximum(18).");
+        _decimal = decimal_;
+        _mint(_msgSender(), initial_supply_);
     }
 
     function decimals() public view virtual override returns (uint8) {
-        return DECIMALS;
+        return _decimal;
     }
 
     /**
