@@ -5,12 +5,15 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ManagerControl is AccessControl ,Ownable {
-
+contract ManagerControl is AccessControl, Ownable {
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
+    /// @dev Whether to allow administrator-included transfers only
+    bool private _useAllowManagerIncludedTransfer;
+
     /// @dev Add `root` to the manager role as a member.
-    constructor () {
+    constructor() {
+        _useAllowManagerIncludedTransfer = true;
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(MANAGER_ROLE, _msgSender());
         _setRoleAdmin(MANAGER_ROLE, DEFAULT_ADMIN_ROLE);
@@ -37,16 +40,22 @@ contract ManagerControl is AccessControl ,Ownable {
      *
      *  /^AccessControl: account (0x[0-9a-f]{40}) is missing role (0x[0-9a-f]{64})$/
      */
-    function _checkRoleBoth(bytes32 role, address alice, address bob) internal view virtual {
-        if ( !( hasRole(role, alice) || hasRole(role, bob)) ) {
-            revert(
-                string(
-                    abi.encodePacked(
-                        "AccessControl: Do not transfer between regular accounts.",
-                        Strings.toHexString(uint256(role), 32)
+    function _checkRoleBoth(
+        bytes32 role,
+        address alice,
+        address bob
+    ) internal view virtual {
+        if (_useAllowManagerIncludedTransfer) {
+            if (!(hasRole(role, alice) || hasRole(role, bob))) {
+                revert(
+                    string(
+                        abi.encodePacked(
+                            "AccessControl: Do not transfer between regular accounts.",
+                            Strings.toHexString(uint256(role), 32)
+                        )
                     )
-                )
-            );
+                );
+            }
         }
     }
 
@@ -65,6 +74,18 @@ contract ManagerControl is AccessControl ,Ownable {
         revokeRole(MANAGER_ROLE, account);
     }
 
+    /// @dev Enable allow manager-included transfers only.
+    function enableAllowManagerIncludedTransfer() public virtual onlyRole(MANAGER_ROLE) {
+        _useAllowManagerIncludedTransfer = true;
+    }
 
+    /// @dev Disable allow manager-included transfers only.
+    function disableAllowManagerIncludedTransfer() public virtual onlyRole(MANAGER_ROLE) {
+        _useAllowManagerIncludedTransfer = false;
+    }
 
+    /// @dev Return whether to allow manager-included transfers only
+    function isAllowManagerIncludedTransfer() public view virtual returns (bool) {
+        return _useAllowManagerIncludedTransfer;
+    }
 }
