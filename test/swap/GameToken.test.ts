@@ -102,4 +102,19 @@ describe("Test of GameToken", () => {
         );
         expect(await token.allowance(user02.address, manager.address)).to.eq(0);
     });
+
+    it("Check included manager transfer.", async () => {
+        await gameToken.connect(ownerSigner).transfer(user01.address, 200);
+
+        const token = await gameToken.connect(user01Signer);
+        await expect(token.transfer(user02.address, 100)).to.be.reverted;
+
+        await gameToken.connect(managerSigner).disableAllowManagerIncludedTransfer();
+
+        await expect(() => token.transfer(user02.address, 100)).to.changeTokenBalance(token, user02, 100);
+
+        await gameToken.connect(managerSigner).enableAllowManagerIncludedTransfer();
+
+        await expect(token.transfer(user02.address, 100)).to.be.reverted;
+    });
 });
