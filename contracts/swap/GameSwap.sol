@@ -4,15 +4,23 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./access/ManagerControl.sol";
 import "./GameToken.sol";
 
 contract GameSwap is Ownable, ManagerControl, Pausable {
-    address private swapTokenAddress;
-
     constructor(address _tokenAddress) {
         swapTokenAddress = _tokenAddress;
+        useSwapLimitPerDay = false;
     }
+
+    address private swapTokenAddress;
+
+    bool private useSwapLimitPerDay;
+
+    uint256 private swapLimitAmountPerDay = 0;
+
+    mapping(uint256 => uint256) private swapTotalAmountToday;
 
     enum States {
         INVALID,
@@ -24,6 +32,49 @@ contract GameSwap is Ownable, ManagerControl, Pausable {
         address traderAddress;
         uint256 amount;
         uint256 createTimestamp;
+    }
+
+    event ChangeSwapLimitPerDayAmount(uint256 amount);
+    event ResetTodaySwapLimitAmount(uint256 amount);
+    event EnabledSwapLimitPerDay();
+    event DisabledSwapLimitPerDay();
+
+    function today() internal view returns (uint256) {
+        return block.timestamp / 1 days;
+    }
+
+    function enableSwapLimitPerDay() public onlyRole(MANAGER_ROLE) {
+        useSwapLimitPerDay = true;
+        emit EnabledSwapLimitPerDay();
+    }
+
+    function disableSwapLimitPerDay() public onlyRole(MANAGER_ROLE) {
+        useSwapLimitPerDay = false;
+        emit DisabledSwapLimitPerDay();
+    }
+
+    function isSwapLimitPerDay() public view returns (bool) {
+        return useSwapLimitPerDay;
+    }
+
+    function setSwapLimitPerDayAmount(uint256 amount) public virtual onlyRole(MANAGER_ROLE) {
+        swapLimitAmountPerDay = amount;
+        emit ChangeSwapLimitPerDayAmount(swapLimitAmountPerDay);
+    }
+
+    function getTodaySwappedAmount() public view virtual returns (uint256) {
+        return swapTotalAmountToday[today()];
+    }
+
+    function getTodaySwappableAmount() public view virtual returns (uint256) {
+        uint256 swappedAmount = swapTotalAmountToday[today()];
+        if (swapLimitAmountPerDay < swappedAmount) return 0;
+        return SafeMath.sub(swapLimitAmountPerDay, swappedAmount);
+    }
+
+    function resetTodaySwapAmount() public virtual onlyRole(MANAGER_ROLE) {
+        swapTotalAmountToday[today()] = 0;
+        emit ResetTodaySwapLimitAmount(swapTotalAmountToday[today()]);
     }
 
     event OpenDeposit(bytes32 boxID, address requestor, uint256 amount);
@@ -121,6 +172,10 @@ contract GameSwap is Ownable, ManagerControl, Pausable {
     ) public onlyRole(MANAGER_ROLE) onlyEmptyWithdrawBoxes(_boxID) whenNotPaused {
         GameToken token = GameToken(swapTokenAddress);
 
+        if (useSwapLimitPerDay && swapLimitAmountPerDay < SafeMath.add(swapTotalAmountToday[today()], _amount)) {
+            revert(string(abi.encodePacked("SwapControl: Daily Swap Limit Exceeded.")));
+        }
+        swapTotalAmountToday[today()] = SafeMath.add(swapTotalAmountToday[today()], _amount);
         token.mint(address(this), _amount);
 
         LockBox memory box = LockBox({
