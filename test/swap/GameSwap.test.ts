@@ -127,4 +127,56 @@ describe("Test of GameSwap Contract", () => {
         assert.strictEqual(result[1].toString(), user01.address);
         assert.strictEqual(result[2].toNumber(), 100);
     });
+
+    it("Check transfer limit", async () => {
+        const swap = await gameSwap.connect(managerSigner);
+
+        expect(await swap.getTodaySwappedAmount()).to.eq(100);
+        await expect(swap.enableSwapLimitPerDay()).to.emit(swap, "EnabledSwapLimitPerDay");
+        await expect(swap.setSwapLimitPerDayAmount(500)).to.emit(swap, "ChangeSwapLimitPerDayAmount");
+
+        let boxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        await swap.openWithdrawPoint2Token(boxID, user01.address, 100);
+        await swap.closeWithdrawPoint2Token(boxID);
+        expect(await gameSwap.getTodaySwappedAmount()).to.eq(200);
+        expect(await gameSwap.getTodaySwappableAmount()).to.eq(300);
+
+        boxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        await swap.openWithdrawPoint2Token(boxID, user01.address, 100);
+        await swap.closeWithdrawPoint2Token(boxID);
+        expect(await gameSwap.getTodaySwappedAmount()).to.eq(300);
+        expect(await gameSwap.getTodaySwappableAmount()).to.eq(200);
+
+        boxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        await swap.openWithdrawPoint2Token(boxID, user01.address, 100);
+        await swap.closeWithdrawPoint2Token(boxID);
+        expect(await gameSwap.getTodaySwappedAmount()).to.eq(400);
+        expect(await gameSwap.getTodaySwappableAmount()).to.eq(100);
+
+        boxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        await swap.openWithdrawPoint2Token(boxID, user01.address, 100);
+        await swap.closeWithdrawPoint2Token(boxID);
+        expect(await gameSwap.getTodaySwappedAmount()).to.eq(500);
+        expect(await gameSwap.getTodaySwappableAmount()).to.eq(0);
+
+        boxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        await expect(swap.openWithdrawPoint2Token(boxID, user01.address, 1)).to.be.reverted;
+        await expect(swap.closeWithdrawPoint2Token(boxID)).to.be.reverted;
+        expect(await gameSwap.getTodaySwappedAmount()).to.eq(500);
+    });
+
+    it("Reset transfer limit volume", async () => {
+        const swap = await gameSwap.connect(managerSigner);
+
+        expect(await gameSwap.getTodaySwappedAmount()).to.eq(500);
+        await expect(gameSwap.connect(user01Signer).resetTodaySwapAmount()).to.be.reverted;
+
+        await expect(swap.resetTodaySwapAmount()).to.emit(swap, "ResetTodaySwapLimitAmount");
+        expect(await gameSwap.getTodaySwappedAmount()).to.eq(0);
+
+        const boxID = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        await swap.openWithdrawPoint2Token(boxID, user01.address, 100);
+        await swap.closeWithdrawPoint2Token(boxID);
+        expect(await gameSwap.getTodaySwappedAmount()).to.eq(100);
+    });
 });
