@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./access/ManagerControl.sol";
 
-contract MetaSwap is Ownable, ManagerControl, Pausable {
+contract MetaTokenSwap is Ownable, ManagerControl, Pausable {
     address private swapTokenAddress;
 
     uint256 private BOA_UNIT_PER_COIN = 10_000_000;
@@ -203,34 +203,34 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
     event IncreasedLiquidity(address provider, uint256 amount);
     event DecreasedLiquidity(address provider, uint256 amount);
 
-    function increaseLiquidity(address _provider, uint256 _amount) public {
+    function increaseLiquidity(uint256 _amount) public {
         require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_INCREASE");
 
         IERC20 token = IERC20(swapTokenAddress);
 
         require(
-            _amount <= token.allowance(_provider, address(this)),
+            _amount <= token.allowance(msg.sender, address(this)),
             "The specified amount is not allowed to be transferred to the liquidity.|NOT_ALLOWANCE_INCREASE"
         );
 
         require(
-            token.transferFrom(_provider, address(this), _amount),
+            token.transferFrom(msg.sender, address(this), _amount),
             "An error occurred during transfer to the liquidity.|ERROR_TRANSFER_INCREASE"
         );
 
-        uint256 liquid = liquidBalance[_provider];
+        uint256 liquid = liquidBalance[msg.sender];
 
         liquid = SafeMath.add(liquid, _amount);
 
-        liquidBalance[_provider] = liquid;
+        liquidBalance[msg.sender] = liquid;
 
-        emit IncreasedLiquidity(_provider, _amount);
+        emit IncreasedLiquidity(msg.sender, _amount);
     }
 
-    function decreaseLiquidity(address _provider, uint256 _amount) public {
+    function decreaseLiquidity(uint256 _amount) public {
         require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_DECREASE");
 
-        uint256 liquid = liquidBalance[_provider];
+        uint256 liquid = liquidBalance[msg.sender];
 
         require(_amount <= liquid, "The liquidity of user is insufficient.|INSUFFICIENT_BALANCE_DECREASE");
 
@@ -242,15 +242,15 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         );
 
         require(
-            token.transfer(_provider, _amount),
+            token.transfer(msg.sender, _amount),
             "An error occurred during refund to the user from the liquidity.|ERROR_TRANSFER_DECREASE"
         );
 
         liquid = SafeMath.sub(liquid, _amount);
 
-        liquidBalance[_provider] = liquid;
+        liquidBalance[msg.sender] = liquid;
 
-        emit DecreasedLiquidity(_provider, _amount);
+        emit DecreasedLiquidity(msg.sender, _amount);
     }
 
     function balanceOfLiquidity(address _provider) public view returns (uint256 amount) {
