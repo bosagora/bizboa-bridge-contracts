@@ -5,17 +5,12 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./access/ManagerControl.sol";
 
 contract MetaSwap is Ownable, ManagerControl, Pausable {
-    address private swapTokenAddress;
+    uint256 private BOA_UNIT_PER_COIN = 1_000_000_000_000_000_000;
 
-    uint256 private BOA_UNIT_PER_COIN = 10_000_000;
-
-    constructor(address _tokenAddress) {
-        swapTokenAddress = _tokenAddress;
-    }
+    constructor() {}
 
     enum States {
         INVALID,
@@ -24,7 +19,7 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
     }
 
     struct LockBox {
-        address traderAddress;
+        address payable traderAddress;
         uint256 amount;
         uint256 withdraw_amount;
         uint256 createTimestamp;
@@ -54,35 +49,20 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         _unpause();
     }
 
-    function openDepositToken2Point(bytes32 _boxID, uint256 _amount)
-        public
-        onlyEmptyDepositBoxes(_boxID)
-        whenNotPaused
-    {
-        IERC20 token = IERC20(swapTokenAddress);
-
-        require(
-            _amount <= token.allowance(msg.sender, address(this)),
-            "The specified amount is not allowed to be transferred to the deposit box.|NOT_ALLOWED_OPEN_DEPOSIT"
-        );
-        require(
-            token.transferFrom(msg.sender, address(this), _amount),
-            "An error occurred during transfer to the deposit box.|ERROR_TRANSFER_OPEN_DEPOSIT"
-        );
-
+    function openDepositBOA2Point(bytes32 _boxID) public payable onlyEmptyDepositBoxes(_boxID) whenNotPaused {
         LockBox memory box = LockBox({
-            amount: _amount,
+            amount: msg.value,
             withdraw_amount: 0,
-            traderAddress: msg.sender,
+            traderAddress: payable(msg.sender),
             createTimestamp: block.timestamp
         });
 
         depositBoxes[_boxID] = box;
         depositBoxStates[_boxID] = States.OPEN;
-        emit OpenDeposit(_boxID, msg.sender, _amount);
+        emit OpenDeposit(_boxID, msg.sender, msg.value);
     }
 
-    function closeDepositToken2Point(bytes32 _boxID)
+    function closeDepositBOA2Point(bytes32 _boxID)
         public
         onlyRole(MANAGER_ROLE)
         onlyOpenDepositBoxes(_boxID)
@@ -93,7 +73,7 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         emit CloseDeposit(_boxID, box.traderAddress, box.amount);
     }
 
-    function checkDepositToken2Point(bytes32 _boxID)
+    function checkDepositBOA2Point(bytes32 _boxID)
         public
         view
         returns (
@@ -124,26 +104,24 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         _;
     }
 
-    function openWithdrawPoint2Token(
+    function openWithdrawPoint2BOA(
         bytes32 _boxID,
         address _beneficiary,
         uint256 _amount,
-        uint256 token_price
+        uint256 _boa_price
     ) public onlyRole(MANAGER_ROLE) onlyEmptyWithdrawBoxes(_boxID) whenNotPaused {
-        IERC20 token = IERC20(swapTokenAddress);
-
         uint256 point_amount = _amount;
-        uint256 token_amount = SafeMath.div(SafeMath.mul(point_amount, BOA_UNIT_PER_COIN), token_price);
+        uint256 boa_amount = SafeMath.div(SafeMath.mul(point_amount, BOA_UNIT_PER_COIN), _boa_price);
 
         require(
-            token_amount <= token.balanceOf(address(this)),
+            boa_amount <= address(this).balance,
             "The liquidity of the withdrawal box is insufficient.|NOT_ALLOWED_OPEN_WITHDRAW"
         );
 
         LockBox memory box = LockBox({
             amount: _amount,
-            withdraw_amount: token_amount,
-            traderAddress: _beneficiary,
+            withdraw_amount: boa_amount,
+            traderAddress: payable(_beneficiary),
             createTimestamp: block.timestamp
         });
 
@@ -152,37 +130,33 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         emit OpenWithdraw(_boxID, _beneficiary, _amount);
     }
 
-    function closeWithdrawPoint2Token(bytes32 _boxID, uint256 token_price)
+    function closeWithdrawPoint2BOA(bytes32 _boxID, uint256 _boa_price)
         public
         onlyRole(MANAGER_ROLE)
         onlyOpenWithdrawBoxes(_boxID)
         whenNotPaused
     {
-        require(token_price != 0, "The token price was entered incorrectly.|INCORRECT_TOKEN_PRICE");
+        require(_boa_price != 0, "The coin price was entered incorrectly.|INCORRECT_COIN_PRICE");
 
-        IERC20 token = IERC20(swapTokenAddress);
         LockBox memory box = withdrawBoxes[_boxID];
 
         uint256 point_amount = box.amount;
-        uint256 token_amount = SafeMath.div(SafeMath.mul(point_amount, BOA_UNIT_PER_COIN), token_price);
+        uint256 boa_amount = SafeMath.div(SafeMath.mul(point_amount, BOA_UNIT_PER_COIN), _boa_price);
 
         require(
-            token_amount <= token.balanceOf(address(this)),
+            boa_amount <= address(this).balance,
             "The liquidity of the withdraw box is insufficient.|INSUFFICIENT_LIQUIDITY_CLOSE_WITHDRAW"
         );
 
-        require(
-            token.transfer(box.traderAddress, token_amount),
-            "An error occurred during refund to the user from the withdraw box.|ERROR_TRANSFER_CLOSE_WITHDRAW"
-        );
+        box.traderAddress.transfer(boa_amount);
 
-        withdrawBoxes[_boxID].withdraw_amount = token_amount;
+        withdrawBoxes[_boxID].withdraw_amount = boa_amount;
         withdrawBoxStates[_boxID] = States.CLOSED;
 
-        emit CloseWithdraw(_boxID, box.traderAddress, token_amount);
+        emit CloseWithdraw(_boxID, box.traderAddress, boa_amount);
     }
 
-    function checkWithdrawPoint2Token(bytes32 _boxID)
+    function checkWithdrawPoint2BOA(bytes32 _boxID)
         public
         view
         returns (
@@ -203,54 +177,26 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
     event IncreasedLiquidity(address provider, uint256 amount);
     event DecreasedLiquidity(address provider, uint256 amount);
 
-    function increaseLiquidity(address _provider, uint256 _amount) public {
-        require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_INCREASE");
+    function increaseLiquidity() public payable {
+        uint256 liquid = liquidBalance[msg.sender];
+        liquid = SafeMath.add(liquid, msg.value);
+        liquidBalance[msg.sender] = liquid;
 
-        IERC20 token = IERC20(swapTokenAddress);
-
-        require(
-            _amount <= token.allowance(_provider, address(this)),
-            "The specified amount is not allowed to be transferred to the liquidity.|NOT_ALLOWANCE_INCREASE"
-        );
-
-        require(
-            token.transferFrom(_provider, address(this), _amount),
-            "An error occurred during transfer to the liquidity.|ERROR_TRANSFER_INCREASE"
-        );
-
-        uint256 liquid = liquidBalance[_provider];
-
-        liquid = SafeMath.add(liquid, _amount);
-
-        liquidBalance[_provider] = liquid;
-
-        emit IncreasedLiquidity(_provider, _amount);
+        emit IncreasedLiquidity(msg.sender, msg.value);
     }
 
-    function decreaseLiquidity(address _provider, uint256 _amount) public {
+    function decreaseLiquidity(uint256 _amount) public {
         require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_DECREASE");
-
-        uint256 liquid = liquidBalance[_provider];
+        uint256 liquid = liquidBalance[msg.sender];
 
         require(_amount <= liquid, "The liquidity of user is insufficient.|INSUFFICIENT_BALANCE_DECREASE");
+        require(_amount <= address(this).balance, "The liquidity is insufficient.|INSUFFICIENT_LIQUIDITY_DECREASE");
 
-        IERC20 token = IERC20(swapTokenAddress);
-
-        require(
-            _amount <= token.balanceOf(address(this)),
-            "The liquidity is insufficient.|INSUFFICIENT_LIQUIDITY_DECREASE"
-        );
-
-        require(
-            token.transfer(_provider, _amount),
-            "An error occurred during refund to the user from the liquidity.|ERROR_TRANSFER_DECREASE"
-        );
-
+        payable(msg.sender).transfer(_amount);
         liquid = SafeMath.sub(liquid, _amount);
+        liquidBalance[msg.sender] = liquid;
 
-        liquidBalance[_provider] = liquid;
-
-        emit DecreasedLiquidity(_provider, _amount);
+        emit DecreasedLiquidity(msg.sender, _amount);
     }
 
     function balanceOfLiquidity(address _provider) public view returns (uint256 amount) {
