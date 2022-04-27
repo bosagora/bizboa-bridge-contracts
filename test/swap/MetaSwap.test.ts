@@ -13,7 +13,7 @@ describe("Test of MetaSwap Contract", () => {
     let withdrawLockBoxID2: string;
 
     const provider = waffle.provider;
-    const [owner, manager, user01, user02] = provider.getWallets();
+    const [owner, manager, fee_manager, user01, user02] = provider.getWallets();
     const ownerSigner = provider.getSigner(owner.address);
     const managerSigner = provider.getSigner(manager.address);
     const user01Signer = provider.getSigner(user01.address);
@@ -21,15 +21,19 @@ describe("Test of MetaSwap Contract", () => {
 
     const liquidity_amount = BOACoin(1000);
     const swap_amount = BOACoin(100);
+    const swap_fee = BOACoin(2);
+    const tx_fee = BOACoin(5);
+    const total_fee = swap_fee.add(tx_fee);
 
     const boa_price = 100;
     const swap_point = 2000;
+    const collectFee = true;
 
     let old_user_balance_bizNet: BigNumber;
 
     before(async () => {
         const swap = await ethers.getContractFactory("MetaSwap");
-        metaSwap = await swap.deploy();
+        metaSwap = await swap.deploy(fee_manager.address, collectFee);
         await metaSwap.deployed();
     });
 
@@ -54,7 +58,7 @@ describe("Test of MetaSwap Contract", () => {
         expect(await metaSwap.balanceOfLiquidity(owner.address)).to.equal(liquidity_amount);
     });
 
-    context("MetaPoint to Coin", async () => {
+    context("MetaPoint to BOACoin", async () => {
         it("Save current BOACoin balance", async () => {
             old_user_balance_bizNet = await provider.getBalance(user01.address);
         });
@@ -63,7 +67,7 @@ describe("Test of MetaSwap Contract", () => {
             await expect(
                 metaSwap
                     .connect(managerSigner)
-                    .openWithdrawPoint2BOA(withdrawLockBoxID, user01.address, swap_point, boa_price)
+                    .openWithdrawPoint2BOA(withdrawLockBoxID, user01.address, swap_point, boa_price, swap_fee, tx_fee)
             ).to.emit(metaSwap, "OpenWithdraw");
         });
 
@@ -72,13 +76,15 @@ describe("Test of MetaSwap Contract", () => {
             assert.strictEqual(result[0].toString(), "1");
             assert.strictEqual(result[1].toString(), user01.address);
             assert.strictEqual(result[2].toString(), swap_point.toString());
+            assert.strictEqual(result[3].toString(), swap_fee.toString());
+            assert.strictEqual(result[4].toString(), tx_fee.toString());
         });
 
         it("Check the open withdraw box with duplicate lockBoxID", async () => {
             await expect(
                 metaSwap
                     .connect(managerSigner)
-                    .openWithdrawPoint2BOA(withdrawLockBoxID, user01.address, swap_point, boa_price)
+                    .openWithdrawPoint2BOA(withdrawLockBoxID, user01.address, swap_point, boa_price, swap_fee, tx_fee)
             ).to.be.reverted;
         });
 
@@ -92,7 +98,9 @@ describe("Test of MetaSwap Contract", () => {
         });
 
         it("Test to see if coins have been converted to points", async () => {
-            const ExpectedAmount = BOACoin(swap_point / boa_price).add(old_user_balance_bizNet);
+            const ExpectedAmount = BOACoin(swap_point / boa_price)
+                .sub(total_fee)
+                .add(old_user_balance_bizNet);
             expect(await provider.getBalance(user01.address)).to.equal(ExpectedAmount);
         });
 
@@ -100,18 +108,20 @@ describe("Test of MetaSwap Contract", () => {
             const result = await metaSwap.checkWithdrawPoint2BOA(withdrawLockBoxID);
             assert.strictEqual(result[0].toString(), "2");
             assert.strictEqual(result[1].toString(), user01.address);
-            assert.strictEqual(result[2].toNumber(), swap_point);
+            assert.strictEqual(result[2].toString(), swap_point.toString());
+            assert.strictEqual(result[3].toString(), swap_fee.toString());
+            assert.strictEqual(result[4].toString(), tx_fee.toString());
         });
     });
 
-    context("Coin to MetaPoint", async () => {
+    context("BOACoin to MetaPoint", async () => {
         it("Save current BOACoin balance", async () => {
             old_user_balance_bizNet = await provider.getBalance(user01.address);
         });
 
         it("Open deposit lock box to swap BOACoin for points.", async () => {
             await expect(
-                metaSwap.connect(user01Signer).openDepositBOA2Point(depositLockBoxID, {
+                metaSwap.connect(user01Signer).openDepositBOA2Point(depositLockBoxID, swap_fee, tx_fee, {
                     from: user01.address,
                     value: swap_amount,
                 })
@@ -123,11 +133,13 @@ describe("Test of MetaSwap Contract", () => {
             assert.strictEqual(result[0].toString(), "1");
             assert.strictEqual(result[1].toString(), user01.address);
             assert.strictEqual(result[2].toString(), swap_amount.toString());
+            assert.strictEqual(result[3].toString(), swap_fee.toString());
+            assert.strictEqual(result[4].toString(), tx_fee.toString());
         });
 
         it("Check the open deposit box with duplicate lockBoxID", async () => {
             await expect(
-                metaSwap.connect(managerSigner).openDepositBOA2Point(depositLockBoxID, {
+                metaSwap.connect(managerSigner).openDepositBOA2Point(depositLockBoxID, swap_fee, tx_fee, {
                     from: user01.address,
                     value: swap_amount,
                 })
@@ -142,7 +154,7 @@ describe("Test of MetaSwap Contract", () => {
             );
         });
 
-        it("Test to see if coins have been converted to points", async () => {
+        it("Test to see if points have been converted to coins", async () => {
             const expectedAmount = old_user_balance_bizNet.sub(swap_amount);
             const amount = await provider.getBalance(user01.address);
             assert.ok(expectedAmount.gt(amount));
@@ -153,15 +165,36 @@ describe("Test of MetaSwap Contract", () => {
             assert.strictEqual(result[0].toString(), "2");
             assert.strictEqual(result[1].toString(), user01.address);
             assert.strictEqual(result[2].toString(), swap_amount.toString());
+            assert.strictEqual(result[3].toString(), swap_fee.toString());
+            assert.strictEqual(result[4].toString(), tx_fee.toString());
         });
     });
-    it("Check the over liquidity withdraw", async () => {
-        const liquidity = await metaSwap.balanceOfLiquidity(owner.address);
-        const swap_point_not_enough: BigNumber = liquidity.mul(boa_price).add(1);
-        await expect(
-            metaSwap
-                .connect(managerSigner)
-                .openWithdrawPoint2BOA(withdrawLockBoxID2, user02.address, swap_point_not_enough, boa_price)
-        ).to.be.reverted;
+
+    context("Check liquidity", async () => {
+        it("Check the collected fee balance", async () => {
+            const liquidityBalance = await metaSwap.balanceOfLiquidity(fee_manager.address);
+            if (collectFee) {
+                assert.strictEqual(liquidityBalance.toString(), total_fee.mul(2).toString());
+            } else {
+                assert.strictEqual(liquidityBalance.toString(), BigNumber.from(0).toString());
+            }
+        });
+
+        it("Check the over liquidity withdraw", async () => {
+            const liquidity = await metaSwap.balanceOfLiquidity(owner.address);
+            const swap_point_not_enough: BigNumber = liquidity.mul(boa_price).add(1);
+            await expect(
+                metaSwap
+                    .connect(managerSigner)
+                    .openWithdrawPoint2BOA(
+                        withdrawLockBoxID2,
+                        user02.address,
+                        swap_point_not_enough,
+                        boa_price,
+                        swap_fee,
+                        tx_fee
+                    )
+            ).to.be.reverted;
+        });
     });
 });
