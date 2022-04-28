@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -14,7 +13,6 @@ contract BOATokenBridge is ManagerAccessControl {
     uint256 private depositTimeLock;
     uint256 private withdrawTimeLock;
 
-    /// @dev Add `root` to the manager role as a member.
     constructor(
         address _tokenAddress,
         uint256 _timeLock,
@@ -34,6 +32,23 @@ contract BOATokenBridge is ManagerAccessControl {
         depositTimeLock = _timeLock * 2;
         withdrawTimeLock = _timeLock;
         emit ChangeTimeLock(depositTimeLock);
+    }
+
+    event ChangeFeeManager(address newManager, uint256 liquidBalance);
+
+    function setFeeManager(address _feeManagerAddress) public onlyOwner {
+        liquidBalance[_feeManagerAddress] = SafeMath.add(
+            liquidBalance[_feeManagerAddress],
+            liquidBalance[feeManagerAddress]
+        );
+        liquidBalance[feeManagerAddress] = uint256(0);
+        feeManagerAddress = _feeManagerAddress;
+
+        emit ChangeFeeManager(feeManagerAddress, liquidBalance[feeManagerAddress]);
+    }
+
+    function getFeeManager() public view returns (address) {
+        return feeManagerAddress;
     }
 
     enum States {
@@ -101,12 +116,9 @@ contract BOATokenBridge is ManagerAccessControl {
         address _withdrawAddress,
         bytes32 _secretLock
     ) public onlyInvalidDepositBoxes(_boxID) {
-        require(depositBoxStates[_boxID] == States.INVALID, "The deposit box already exists.|ALREADY_OPEN_DEPOSIT");
-
         uint256 totalFee = SafeMath.add(_swapFee, _txFee);
         require(totalFee < _amount, "The fee is insufficient.|INSUFFICIENT_FEE");
 
-        // Transfer value from the ERC20 trader to this contract.
         IERC20 token = IERC20(swapTokenAddress);
         require(
             _amount <= token.allowance(msg.sender, address(this)),
@@ -142,26 +154,20 @@ contract BOATokenBridge is ManagerAccessControl {
     {
         if (collectFee) {
             DepositLockBox memory box = depositBoxes[_boxID];
-            uint256 totalFee = SafeMath.add(box.swapFee, box.txFee);
-            uint256 liquid = liquidBalance[feeManagerAddress];
-            liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
+            liquidBalance[feeManagerAddress] = SafeMath.add(
+                liquidBalance[feeManagerAddress],
+                SafeMath.add(box.txFee, box.swapFee)
+            );
         }
-
-        // Close the box.
         depositBoxes[_boxID].secretKey = _secretKey;
         depositBoxStates[_boxID] = States.CLOSED;
-
-        // No Transfer
 
         emit CloseDeposit(_boxID, _secretKey);
     }
 
     function expireDeposit(bytes32 _boxID) public onlyOpenDepositBoxes(_boxID) onlyExpirableDepositBoxes(_boxID) {
-        // Expire the box.
         DepositLockBox memory box = depositBoxes[_boxID];
         depositBoxStates[_boxID] = States.EXPIRED;
-
-        // Transfer the ERC20 value from this contract back to the ERC20 trader.
         IERC20 token = IERC20(swapTokenAddress);
         require(
             token.transfer(box.traderAddress, box.amount),
@@ -270,8 +276,6 @@ contract BOATokenBridge is ManagerAccessControl {
         address _withdrawAddress,
         bytes32 _secretLock
     ) public onlyManager onlyInvalidWithdrawBoxes(_boxID) {
-        require(withdrawBoxStates[_boxID] == States.INVALID, "The withdraw box already exists.|ALREADY_OPEN_WITHDRAW");
-
         uint256 totalFee = SafeMath.add(_swapFee, _txFee);
         require(totalFee < _amount, "The fee is insufficient.|INSUFFICIENT_FEE");
         uint256 sendAmount = SafeMath.sub(_amount, totalFee);
@@ -311,8 +315,10 @@ contract BOATokenBridge is ManagerAccessControl {
         uint256 sendAmount = SafeMath.sub(box.amount, totalFee);
 
         if (collectFee) {
-            uint256 liquid = liquidBalance[feeManagerAddress];
-            liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
+            liquidBalance[feeManagerAddress] = SafeMath.add(
+                liquidBalance[feeManagerAddress],
+                SafeMath.add(box.txFee, box.swapFee)
+            );
         }
 
         IERC20 token = IERC20(swapTokenAddress);
@@ -328,7 +334,7 @@ contract BOATokenBridge is ManagerAccessControl {
         // Transfer the ERC20 funds from this contract to the withdrawing trader.
         require(
             token.transfer(box.withdrawAddress, sendAmount),
-            "An error occurred during refund to the user from the withdraw box.|ERROR_TRANSFER_CLOSE_WITHDRAW"
+            "An error occurred during refund for the withdraw box.|ERROR_TRANSFER_CLOSE_WITHDRAW"
         );
 
         emit CloseWithdraw(_boxID, _secretKey);
@@ -388,51 +394,36 @@ contract BOATokenBridge is ManagerAccessControl {
 
     function increaseLiquidity(address _provider, uint256 _amount) public {
         require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_INCREASE");
-
         IERC20 token = IERC20(swapTokenAddress);
-
         require(
             _amount <= token.allowance(_provider, address(this)),
             "The specified amount is not allowed to be transferred to the liquidity.|NOT_ALLOWANCE_INCREASE"
         );
-
         require(
             token.transferFrom(_provider, address(this), _amount),
             "An error occurred during transfer to the liquidity.|ERROR_TRANSFER_INCREASE"
         );
-
         uint256 liquid = liquidBalance[_provider];
-
         liquid = SafeMath.add(liquid, _amount);
-
         liquidBalance[_provider] = liquid;
-
         emit IncreasedLiquidity(_provider, _amount);
     }
 
     function decreaseLiquidity(uint256 _amount) public {
         require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_DECREASE");
-
         uint256 liquid = liquidBalance[msg.sender];
-
         require(_amount <= liquid, "The liquidity of user is insufficient.|INSUFFICIENT_BALANCE_DECREASE");
-
         IERC20 token = IERC20(swapTokenAddress);
-
         require(
             _amount <= token.balanceOf(address(this)),
             "The liquidity is insufficient.|INSUFFICIENT_LIQUIDITY_DECREASE"
         );
-
         require(
             token.transfer(msg.sender, _amount),
             "An error occurred during refund to the user from the liquidity.|ERROR_TRANSFER_DECREASE"
         );
-
         liquid = SafeMath.sub(liquid, _amount);
-
         liquidBalance[msg.sender] = liquid;
-
         emit DecreasedLiquidity(msg.sender, _amount);
     }
 
