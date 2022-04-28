@@ -13,7 +13,8 @@ describe("Test of MetaSwap Contract", () => {
     let withdrawLockBoxID2: string;
 
     const provider = waffle.provider;
-    const [owner, manager, fee_manager, user01, user02] = provider.getWallets();
+    const [owner, manager, tx_fee_manager, swap_fee_manager, user01, user02, new_tx_fee_manager, new_swap_fee_manager] =
+        provider.getWallets();
     const ownerSigner = provider.getSigner(owner.address);
     const managerSigner = provider.getSigner(manager.address);
     const user01Signer = provider.getSigner(user01.address);
@@ -33,7 +34,7 @@ describe("Test of MetaSwap Contract", () => {
 
     before(async () => {
         const swap = await ethers.getContractFactory("MetaSwap");
-        metaSwap = await swap.deploy(fee_manager.address, collectFee);
+        metaSwap = await swap.deploy(tx_fee_manager.address, swap_fee_manager.address);
         await metaSwap.deployed();
     });
 
@@ -172,12 +173,24 @@ describe("Test of MetaSwap Contract", () => {
 
     context("Check liquidity", async () => {
         it("Check the collected fee balance", async () => {
-            const liquidityBalance = await metaSwap.balanceOfLiquidity(fee_manager.address);
-            if (collectFee) {
-                assert.strictEqual(liquidityBalance.toString(), total_fee.mul(2).toString());
-            } else {
-                assert.strictEqual(liquidityBalance.toString(), BigNumber.from(0).toString());
-            }
+            expect(await metaSwap.balanceOfLiquidity(tx_fee_manager.address)).to.eq(tx_fee.mul(2));
+            expect(await metaSwap.balanceOfLiquidity(swap_fee_manager.address)).to.eq(swap_fee.mul(2));
+        });
+
+        it("Test of FeeManager change", async () => {
+            await expect(metaSwap.connect(ownerSigner).setTxFeeManager(new_tx_fee_manager.address)).to.emit(
+                metaSwap,
+                "ChangeTxFeeManager"
+            );
+            await expect(metaSwap.connect(ownerSigner).setSwapFeeManager(new_swap_fee_manager.address)).to.emit(
+                metaSwap,
+                "ChangeSwapFeeManager"
+            );
+
+            expect(await metaSwap.balanceOfLiquidity(new_tx_fee_manager.address)).to.eq(tx_fee.mul(2));
+            expect(await metaSwap.balanceOfLiquidity(new_swap_fee_manager.address)).to.eq(swap_fee.mul(2));
+            expect(await metaSwap.balanceOfLiquidity(tx_fee_manager.address)).to.eq(BOACoin(0));
+            expect(await metaSwap.balanceOfLiquidity(swap_fee_manager.address)).to.eq(BOACoin(0));
         });
 
         it("Check the over liquidity withdraw", async () => {
