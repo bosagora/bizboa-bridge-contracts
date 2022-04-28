@@ -9,12 +9,12 @@ import "./access/ManagerControl.sol";
 
 contract MetaSwap is Ownable, ManagerControl, Pausable {
     uint256 private BOA_UNIT_PER_COIN = 1_000_000_000_000_000_000;
-    address private feeManagerAddress;
-    bool private collectFee;
+    address private txFeeManagerAddress;
+    address private swapFeeManagerAddress;
 
-    constructor(address _feeManagerAddress, bool _collectFee) {
-        feeManagerAddress = _feeManagerAddress;
-        collectFee = _collectFee;
+    constructor(address _txFeeManagerAddress, address _swapFeeManagerAddress) {
+        txFeeManagerAddress = _txFeeManagerAddress;
+        swapFeeManagerAddress = _swapFeeManagerAddress;
     }
 
     enum States {
@@ -56,6 +56,39 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         _unpause();
     }
 
+    event ChangeTxFeeManager(address newManager, uint256 liquidBalance);
+    event ChangeSwapFeeManager(address newManager, uint256 liquidBalance);
+
+    function setTxFeeManager(address _txFeeManagerAddress) public onlyOwner {
+        liquidBalance[_txFeeManagerAddress] = SafeMath.add(
+            liquidBalance[_txFeeManagerAddress],
+            liquidBalance[txFeeManagerAddress]
+        );
+        liquidBalance[txFeeManagerAddress] = uint256(0);
+        txFeeManagerAddress = _txFeeManagerAddress;
+
+        emit ChangeTxFeeManager(txFeeManagerAddress, liquidBalance[txFeeManagerAddress]);
+    }
+
+    function getTxFeeManager() public view returns (address) {
+        return txFeeManagerAddress;
+    }
+
+    function setSwapFeeManager(address _swapFeeManagerAddress) public onlyOwner {
+        liquidBalance[_swapFeeManagerAddress] = SafeMath.add(
+            liquidBalance[_swapFeeManagerAddress],
+            liquidBalance[swapFeeManagerAddress]
+        );
+        liquidBalance[swapFeeManagerAddress] = uint256(0);
+        swapFeeManagerAddress = _swapFeeManagerAddress;
+
+        emit ChangeSwapFeeManager(swapFeeManagerAddress, liquidBalance[swapFeeManagerAddress]);
+    }
+
+    function getSwapFeeManager() public view returns (address) {
+        return swapFeeManagerAddress;
+    }
+
     function openDepositBOA2Point(
         bytes32 _boxID,
         uint256 _swapFee,
@@ -86,11 +119,8 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
     {
         LockBox memory box = depositBoxes[_boxID];
 
-        if (collectFee) {
-            uint256 totalFee = SafeMath.add(box.swapFee, box.txFee);
-            uint256 liquid = liquidBalance[feeManagerAddress];
-            liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
-        }
+        liquidBalance[txFeeManagerAddress] = SafeMath.add(liquidBalance[txFeeManagerAddress], box.txFee);
+        liquidBalance[swapFeeManagerAddress] = SafeMath.add(liquidBalance[swapFeeManagerAddress], box.swapFee);
 
         depositBoxStates[_boxID] = States.CLOSED;
         emit CloseDeposit(_boxID, box.traderAddress, box.amount);
@@ -176,10 +206,8 @@ contract MetaSwap is Ownable, ManagerControl, Pausable {
         uint256 boa_amount = SafeMath.div(SafeMath.mul(box.amount, BOA_UNIT_PER_COIN), _boa_price);
         require(totalFee < boa_amount, "The fee is insufficient.|INSUFFICIENT_FEE");
 
-        if (collectFee) {
-            uint256 liquid = liquidBalance[feeManagerAddress];
-            liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
-        }
+        liquidBalance[txFeeManagerAddress] = SafeMath.add(liquidBalance[txFeeManagerAddress], box.txFee);
+        liquidBalance[swapFeeManagerAddress] = SafeMath.add(liquidBalance[swapFeeManagerAddress], box.swapFee);
 
         uint256 sendAmount = SafeMath.sub(boa_amount, totalFee);
 
