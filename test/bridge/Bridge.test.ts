@@ -15,8 +15,9 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
     let bridge_biznet: BOACoinBridge;
 
     const provider = waffle.provider;
-    const [admin, _user, manager, fee_manager, user_eth, user_biz] = provider.getWallets();
+    const [admin, thief, manager, fee_manager, user_eth, user_biz, new_fee_manager] = provider.getWallets();
     const admin_signer = provider.getSigner(admin.address);
+    const thief_signer = provider.getSigner(thief.address);
     const user_eth_signer = provider.getSigner(user_eth.address);
     const user_biz_signer = provider.getSigner(user_biz.address);
     const manager_signer = provider.getSigner(manager.address);
@@ -202,10 +203,8 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
 
         // 수수료는 이더넷의 브리지에서만 모아집니다.
         it("Check the liquidity balance of manager", async () => {
-            const fee_balance_eth = await bridge_ethnet.balanceOfLiquidity(fee_manager.address);
-            assert.strictEqual(fee_balance_eth.toString(), total_fee_token.toString());
-            const fee_balance_biz = await bridge_biznet.balanceOfLiquidity(fee_manager.address);
-            assert.strictEqual(fee_balance_biz.toString(), "0");
+            expect(await bridge_ethnet.balanceOfLiquidity(fee_manager.address)).to.eq(total_fee_token);
+            expect(await bridge_biznet.balanceOfLiquidity(fee_manager.address)).to.eq(BOAToken(0));
         });
     });
 
@@ -315,10 +314,8 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
 
         // 수수료는 이더넷의 브리지에서만 모아집니다.
         it("Check the liquidity balance of manager", async () => {
-            const fee_balance_eth = await bridge_ethnet.balanceOfLiquidity(fee_manager.address);
-            assert.strictEqual(fee_balance_eth.toString(), total_fee_token.mul(2).toString());
-            const fee_balance_biz = await bridge_biznet.balanceOfLiquidity(fee_manager.address);
-            assert.strictEqual(fee_balance_biz.toString(), "0");
+            expect(await bridge_ethnet.balanceOfLiquidity(fee_manager.address)).to.eq(total_fee_token.mul(2));
+            expect(await bridge_biznet.balanceOfLiquidity(fee_manager.address)).to.eq(BOAToken(0));
         });
     });
 
@@ -392,6 +389,19 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
                     }
                 }, 2 * 1000)
             );
+        });
+    });
+
+    context("ETC...", async () => {
+        it("Test of FeeManager change", async () => {
+            await expect(bridge_ethnet.connect(thief_signer).setFeeManager(thief.address)).to.be.reverted;
+            await expect(bridge_ethnet.connect(admin_signer).setFeeManager(new_fee_manager.address)).to.emit(
+                bridge_ethnet,
+                "ChangeFeeManager"
+            );
+
+            expect(await bridge_ethnet.balanceOfLiquidity(new_fee_manager.address)).to.eq(total_fee_token.mul(2));
+            expect(await bridge_ethnet.balanceOfLiquidity(fee_manager.address)).to.eq(BOAToken(0));
         });
     });
 });

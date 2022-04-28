@@ -32,6 +32,23 @@ contract BOACoinBridge is ManagerAccessControl {
         emit ChangeTimeLock(depositTimeLock);
     }
 
+    event ChangeFeeManager(address newManager, uint256 liquidBalance);
+
+    function setFeeManager(address _feeManagerAddress) public onlyOwner {
+        liquidBalance[_feeManagerAddress] = SafeMath.add(
+            liquidBalance[_feeManagerAddress],
+            liquidBalance[feeManagerAddress]
+        );
+        liquidBalance[feeManagerAddress] = uint256(0);
+        feeManagerAddress = _feeManagerAddress;
+
+        emit ChangeFeeManager(feeManagerAddress, liquidBalance[feeManagerAddress]);
+    }
+
+    function getFeeManager() public view returns (address) {
+        return feeManagerAddress;
+    }
+
     enum States {
         INVALID,
         OPEN,
@@ -126,9 +143,10 @@ contract BOACoinBridge is ManagerAccessControl {
     {
         if (collectFee) {
             DepositLockBox memory box = depositBoxes[_boxID];
-            uint256 totalFee = SafeMath.add(box.swapFee, box.txFee);
-            uint256 liquid = liquidBalance[feeManagerAddress];
-            liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
+            liquidBalance[feeManagerAddress] = SafeMath.add(
+                liquidBalance[feeManagerAddress],
+                SafeMath.add(box.txFee, box.swapFee)
+            );
         }
 
         // Close the box.
@@ -289,8 +307,10 @@ contract BOACoinBridge is ManagerAccessControl {
         uint256 sendAmount = SafeMath.sub(box.amount, totalFee);
 
         if (collectFee) {
-            uint256 liquid = liquidBalance[feeManagerAddress];
-            liquidBalance[feeManagerAddress] = SafeMath.add(liquid, totalFee);
+            liquidBalance[feeManagerAddress] = SafeMath.add(
+                liquidBalance[feeManagerAddress],
+                SafeMath.add(box.txFee, box.swapFee)
+            );
         }
 
         require(
