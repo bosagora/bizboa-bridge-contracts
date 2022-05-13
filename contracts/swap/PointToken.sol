@@ -4,20 +4,45 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./access/ProviderControl.sol";
+import "./access/MinterControl.sol";
 
-contract PointToken is ERC20, ProviderControl {
+contract PointToken is ERC20, ProviderControl, MinterControl {
+    uint256 private maxSupplyLimit;
+
     constructor(
         string memory name_,
         string memory symbol_,
+        uint256 maxSupplyLimit_,
         address defaultProviderAddress_,
         address defaultManagerAddress_
     ) ERC20(name_, symbol_) ProviderControl(defaultProviderAddress_) {
         _setupRole(MANAGER_ROLE, defaultManagerAddress_);
-        transferProvider(defaultProviderAddress_);
+        enableAllowManagerIncludedTransfer();
+        maxSupplyLimit = maxSupplyLimit_;
+    }
+
+    event ChangedMaxSupplyLimit(uint256 oldMaxSupplyLimit, uint256 newMaxSupplyLimit, uint256 totalSupply);
+
+    function getMaxSupplyLimit() public view virtual returns (uint256) {
+        return maxSupplyLimit;
+    }
+
+    function setMaxSupplyLimit(uint256 amount_) public virtual onlyManager {
+        require(amount_ > totalSupply(), "PointToken:The amount less than the issued amount cannot be set.");
+        uint256 oldAmount = maxSupplyLimit;
+        maxSupplyLimit = amount_;
+        emit ChangedMaxSupplyLimit(oldAmount, maxSupplyLimit, totalSupply());
     }
 
     function decimals() public view virtual override returns (uint8) {
         return 0;
+    }
+
+    modifier checkSupplyLimit(uint256 amount) {
+        if (maxSupplyLimit > 0) {
+            require(maxSupplyLimit >= (totalSupply() + amount), "PointToken: Supply limit exceeded.");
+        }
+        _;
     }
 
     /**
@@ -27,11 +52,9 @@ contract PointToken is ERC20, ProviderControl {
      * - the caller must have a manager role.
      * - the provider must have a mintable Amount
      */
-    function mint(address account, uint256 amount) public virtual onlyManager {
-        require(amount > 0, "Invalid amount.");
-        require(amount <= getMintableAmount(), "PointToken: mintable exceeded for provider ");
-        super._mint(account, amount);
-        subMintableAmount(amount);
+    function mint(address account, uint256 amount) public onlyMinter checkSupplyLimit(amount) returns (bool) {
+        _mint(account, amount);
+        return true;
     }
 
     /**
@@ -41,7 +64,7 @@ contract PointToken is ERC20, ProviderControl {
      *
      * - the caller must have a manager role.
      */
-    function burn(address from, uint256 amount) public onlyManager returns (bool) {
+    function burn(address from, uint256 amount) public onlyMinter returns (bool) {
         _burn(from, amount);
         return true;
     }
