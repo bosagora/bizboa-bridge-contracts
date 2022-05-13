@@ -7,11 +7,9 @@ import "./ManagerControl.sol";
 contract ProviderControl is ManagerControl {
     bytes32 public constant PROVIDER_ROLE = keccak256("PROVIDER_ROLE");
     address private _provider;
-    uint256 private _mintableAmount;
 
     constructor(address providerAddress_) {
-        _setupRole(PROVIDER_ROLE, providerAddress_);
-        enableAllowManagerIncludedTransfer();
+        _provider = providerAddress_;
     }
 
     /**
@@ -35,10 +33,7 @@ contract ProviderControl is ManagerControl {
         address bob
     ) internal view virtual override {
         if (isAllowManagerIncludedTransfer()) {
-            if (
-                !(hasRole(role, alice) || hasRole(role, bob)) &&
-                !(hasRole(PROVIDER_ROLE, alice) || hasRole(PROVIDER_ROLE, bob))
-            ) {
+            if (!(hasRole(role, alice) || hasRole(role, bob)) && !(_provider == alice || _provider == bob)) {
                 revert(
                     string(
                         abi.encodePacked(
@@ -52,7 +47,6 @@ contract ProviderControl is ManagerControl {
     }
 
     event ChangedProvider(address indexed previousProvider, address indexed newProvider);
-    event AddedMintableAmount(address indexed nowProvider, uint256 addedMintableAmount, uint256 totalMintableAmount);
 
     function transferProvider(address newProvider) public virtual onlyOwner {
         require(newProvider != address(0), "ProviderControl: new provider is the zero address");
@@ -65,18 +59,7 @@ contract ProviderControl is ManagerControl {
         return _provider;
     }
 
-    function addMintableAmount(uint256 amount) public virtual onlyManager {
-        require(amount > 0, "Invalid amount.");
-        _mintableAmount = _mintableAmount + amount;
-
-        emit AddedMintableAmount(getProvider(), amount, _mintableAmount);
-    }
-
-    function getMintableAmount() public view virtual returns (uint256) {
-        return _mintableAmount;
-    }
-
-    function subMintableAmount(uint256 amount) internal virtual {
-        _mintableAmount = _mintableAmount - amount;
+    function isProvider(address account) public view virtual returns (bool) {
+        return hasRole(PROVIDER_ROLE, account);
     }
 }

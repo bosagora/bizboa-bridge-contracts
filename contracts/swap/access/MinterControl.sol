@@ -6,14 +6,20 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract MinterControl is AccessControl, Ownable {
-
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    constructor () {
+    constructor() {
         _setupRole(MINTER_ROLE, msg.sender);
         _setRoleAdmin(MINTER_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
+    /**
+     * @dev Throws if called by any account other than the provider.
+     */
+    modifier onlyMinter() {
+        require(isMinter(msg.sender), "MinterControl: caller is not the minter");
+        _;
+    }
 
     /// @dev Return `true` if the `account` is minter
     function isMinter(address account) public view virtual returns (bool) {
@@ -29,6 +35,4 @@ contract MinterControl is AccessControl, Ownable {
     function removeMinter(address account) public virtual onlyOwner {
         revokeRole(MINTER_ROLE, account);
     }
-
-
 }
