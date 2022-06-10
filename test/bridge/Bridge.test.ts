@@ -319,6 +319,56 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         });
     });
 
+    context("Test the stop function of the swap", async () => {
+        it("Create key by User", async () => {
+            const key_buffer = ContractUtils.createKey();
+            const lock_buffer = ContractUtils.sha256(key_buffer);
+            key = ContractUtils.BufferToString(key_buffer);
+            lock = ContractUtils.BufferToString(lock_buffer);
+            lock_box_id = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
+        });
+
+        it("Inactive swap in EthNet", async () => {
+            await bridge_ethnet.connect(manager_signer).setActive(false);
+            assert.strictEqual(await bridge_ethnet.connect(manager_signer).getActive(), false);
+        });
+
+        it("Open the lock box in EthNet", async () => {
+            await token_ethnet.connect(user_eth_signer).approve(bridge_ethnet.address, swap_amount_token);
+            await expect(
+                bridge_ethnet
+                    .connect(user_eth_signer)
+                    .openDeposit(lock_box_id, swap_amount_token, swap_fee_token, tx_fee_token, user_biz.address, lock)
+            ).to.be.reverted;
+        });
+
+        it("Active swap in EthNet", async () => {
+            await bridge_ethnet.connect(manager_signer).setActive(true);
+            assert.strictEqual(await bridge_ethnet.connect(manager_signer).getActive(), true);
+        });
+
+        it("Inactive swap in BizNet", async () => {
+            await bridge_biznet.connect(manager_signer).setActive(false);
+            assert.strictEqual(await bridge_biznet.connect(manager_signer).getActive(), false);
+        });
+
+        it("Open the lock box in BizNet", async () => {
+            await expect(
+                bridge_biznet
+                    .connect(user_biz_signer)
+                    .openDeposit(lock_box_id, swap_fee_coin, tx_fee_coin, user_eth.address, lock, {
+                        from: user_biz.address,
+                        value: swap_amount_coin,
+                    })
+            ).to.be.reverted;
+        });
+
+        it("Active swap in BizNet", async () => {
+            await bridge_biznet.connect(manager_signer).setActive(true);
+            assert.strictEqual(await bridge_biznet.connect(manager_signer).getActive(), true);
+        });
+    });
+
     context("Expiry Deposit Lock Box", async () => {
         const lockBox_expiry = ContractUtils.BufferToString(ContractUtils.createLockBoxID());
 
