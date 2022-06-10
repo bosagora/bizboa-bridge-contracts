@@ -76,33 +76,30 @@ contract BOACoinBridge is ManagerAccessControl {
     event CloseDeposit(bytes32 _boxID, bytes _secretKey);
 
     modifier onlyInvalidDepositBoxes(bytes32 _boxID) {
-        require(depositBoxStates[_boxID] == States.INVALID, "The deposit box already exists.|ALREADY_OPEN_DEPOSIT");
+        require(depositBoxStates[_boxID] == States.INVALID, "Already open deposit.|ALREADY_OPEN_DEPOSIT");
         _;
     }
 
     modifier onlyOpenDepositBoxes(bytes32 _boxID) {
-        require(depositBoxStates[_boxID] == States.OPEN, "The deposit box is not open.|NOT_OPEN_DEPOSIT");
+        require(depositBoxStates[_boxID] == States.OPEN, "Not open deposit.|NOT_OPEN_DEPOSIT");
         _;
     }
 
     modifier onlyClosedDepositBoxes(bytes32 _boxID) {
-        require(depositBoxStates[_boxID] == States.CLOSED, "The deposit box is not close.|NOT_CLOSE_DEPOSIT");
+        require(depositBoxStates[_boxID] == States.CLOSED, "Not close deposit.|NOT_CLOSE_DEPOSIT");
         _;
     }
 
     modifier onlyExpirableDepositBoxes(bytes32 _boxID) {
         require(
             depositBoxes[_boxID].timeLock + depositBoxes[_boxID].createTimestamp <= block.timestamp,
-            "The deposit box cannot be expired.|NOT_EXPIRED_DEPOSIT"
+            "Not expired deposit.|NOT_EXPIRED_DEPOSIT"
         );
         _;
     }
 
     modifier onlyWithSecretKeyDepositBoxes(bytes32 _boxID, bytes memory _secretKey) {
-        require(
-            depositBoxes[_boxID].secretLock == sha256(_secretKey),
-            "It's not the key to the deposit box.|NOT_KEY_DEPOSIT"
-        );
+        require(depositBoxes[_boxID].secretLock == sha256(_secretKey), "Not key deposit.|NOT_KEY_DEPOSIT");
         _;
     }
 
@@ -113,10 +110,10 @@ contract BOACoinBridge is ManagerAccessControl {
         address payable _withdrawAddress,
         bytes32 _secretLock
     ) public payable onlyInvalidDepositBoxes(_boxID) {
-        require(depositBoxStates[_boxID] == States.INVALID, "The deposit box already exists.|ALREADY_OPEN_DEPOSIT");
+        require(depositBoxStates[_boxID] == States.INVALID, "Already open deposit.|ALREADY_OPEN_DEPOSIT");
 
         uint256 totalFee = SafeMath.add(_swapFee, _txFee);
-        require(totalFee < msg.value, "The fee is insufficient.|INSUFFICIENT_FEE");
+        require(totalFee < msg.value, "Insufficient fee.|INSUFFICIENT_FEE");
 
         // Store the details of the box.
         DepositLockBox memory box = DepositLockBox({
@@ -228,33 +225,30 @@ contract BOACoinBridge is ManagerAccessControl {
     event CloseWithdraw(bytes32 _boxID, bytes _secretKey);
 
     modifier onlyInvalidWithdrawBoxes(bytes32 _boxID) {
-        require(withdrawBoxStates[_boxID] == States.INVALID, "The withdraw box already exists.|ALREADY_OPEN_WITHDRAW");
+        require(withdrawBoxStates[_boxID] == States.INVALID, "Already open withdraw.|ALREADY_OPEN_WITHDRAW");
         _;
     }
 
     modifier onlyOpenWithdrawBoxes(bytes32 _boxID) {
-        require(withdrawBoxStates[_boxID] == States.OPEN, "The withdraw box is not open.|NOT_OPEN_WITHDRAW");
+        require(withdrawBoxStates[_boxID] == States.OPEN, "Not open withdraw.|NOT_OPEN_WITHDRAW");
         _;
     }
 
     modifier onlyClosedWithdrawBoxes(bytes32 _boxID) {
-        require(withdrawBoxStates[_boxID] == States.CLOSED, "The withdraw box is not close.|NOT_CLOSE_WITHDRAW");
+        require(withdrawBoxStates[_boxID] == States.CLOSED, "Not close withdraw.|NOT_CLOSE_WITHDRAW");
         _;
     }
 
     modifier onlyExpirableWithdrawBoxes(bytes32 _boxID) {
         require(
             withdrawBoxes[_boxID].timeLock + withdrawBoxes[_boxID].createTimestamp <= block.timestamp,
-            "The withdraw box cannot be expired.|NOT_EXPIRED_WITHDRAW"
+            "Not expired withdraw.|NOT_EXPIRED_WITHDRAW"
         );
         _;
     }
 
     modifier onlyWithSecretKeyWithdrawBoxes(bytes32 _boxID, bytes memory _secretKey) {
-        require(
-            withdrawBoxes[_boxID].secretLock == sha256(_secretKey),
-            "It's not the key to the withdraw box.|NOT_KEY_WITHDRAW"
-        );
+        require(withdrawBoxes[_boxID].secretLock == sha256(_secretKey), "Not key withdraw.|NOT_KEY_WITHDRAW");
         _;
     }
 
@@ -267,17 +261,14 @@ contract BOACoinBridge is ManagerAccessControl {
         address payable _withdrawAddress,
         bytes32 _secretLock
     ) public onlyManager onlyInvalidWithdrawBoxes(_boxID) {
-        require(withdrawBoxStates[_boxID] == States.INVALID, "The withdraw box already exists.|ALREADY_OPEN_WITHDRAW");
+        require(withdrawBoxStates[_boxID] == States.INVALID, "Already open withdraw.|ALREADY_OPEN_WITHDRAW");
 
         uint256 totalFee = SafeMath.add(_swapFee, _txFee);
-        require(totalFee < _amount, "The fee is insufficient.|INSUFFICIENT_FEE");
+        require(totalFee < _amount, "Insufficient fee.|INSUFFICIENT_FEE");
         uint256 sendAmount = SafeMath.sub(_amount, totalFee);
 
         // Transfer value from the ERC20 trader to this contract.
-        require(
-            sendAmount <= address(this).balance,
-            "The liquidity of the withdrawal box is insufficient.|NOT_ALLOWED_OPEN_WITHDRAW"
-        );
+        require(sendAmount <= address(this).balance, "Insufficient liquidity.|INSUFFICIENT_LIQUIDITY");
 
         // Store the details of the box.
         WithdrawLockBox memory box = WithdrawLockBox({
@@ -315,7 +306,7 @@ contract BOACoinBridge is ManagerAccessControl {
 
         require(
             sendAmount <= address(this).balance,
-            "The liquidity of the withdraw box is insufficient.|INSUFFICIENT_LIQUIDITY_CLOSE_WITHDRAW"
+            "Insufficient liquidity close withdraw.|INSUFFICIENT_LIQUIDITY_CLOSE_WITHDRAW"
         );
 
         // Close the box.
@@ -391,11 +382,11 @@ contract BOACoinBridge is ManagerAccessControl {
     }
 
     function decreaseLiquidity(uint256 _amount) public {
-        require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_DECREASE");
+        require(_amount > 0, "Invalid amount decrease.|INVALID_AMOUNT_DECREASE");
 
         uint256 liquid = liquidBalance[msg.sender];
 
-        require(_amount <= liquid, "The liquidity of user is insufficient.|INSUFFICIENT_BALANCE_DECREASE");
+        require(_amount <= liquid, "Insufficient user's  liquidity.|INSUFFICIENT_BALANCE_DECREASE");
 
         require(_amount <= address(this).balance, "The liquidity is insufficient.|INSUFFICIENT_LIQUIDITY_DECREASE");
 
