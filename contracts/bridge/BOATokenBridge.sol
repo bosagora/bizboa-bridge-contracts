@@ -12,6 +12,7 @@ contract BOATokenBridge is ManagerAccessControl {
     bool private collectFee;
     uint256 private depositTimeLock;
     uint256 private withdrawTimeLock;
+    bool private active;
 
     constructor(
         address _tokenAddress,
@@ -24,6 +25,7 @@ contract BOATokenBridge is ManagerAccessControl {
         withdrawTimeLock = _timeLock;
         feeManagerAddress = _feeManagerAddress;
         collectFee = _collectFee;
+        active = true;
     }
 
     event ChangeTimeLock(uint256 _timeLock);
@@ -49,6 +51,17 @@ contract BOATokenBridge is ManagerAccessControl {
 
     function getFeeManager() public view returns (address) {
         return feeManagerAddress;
+    }
+
+    event ChangeActive(bool);
+
+    function setActive(bool _value) public onlyManager {
+        active = _value;
+        emit ChangeActive(_value);
+    }
+
+    function getActive() public view returns (bool value) {
+        return active;
     }
 
     enum States {
@@ -113,6 +126,8 @@ contract BOATokenBridge is ManagerAccessControl {
         address _withdrawAddress,
         bytes32 _secretLock
     ) public onlyInvalidDepositBoxes(_boxID) {
+        require(active, "Swap stopped|NOT_ACTIVE");
+
         uint256 totalFee = SafeMath.add(_swapFee, _txFee);
         require(totalFee < _amount, "Insufficient fee.|INSUFFICIENT_FEE");
 

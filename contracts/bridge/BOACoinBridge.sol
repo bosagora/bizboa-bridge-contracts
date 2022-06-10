@@ -11,6 +11,7 @@ contract BOACoinBridge is ManagerAccessControl {
     bool private collectFee;
     uint256 private depositTimeLock;
     uint256 private withdrawTimeLock;
+    bool private active;
 
     /// @dev Add `root` to the manager role as a member.
     constructor(
@@ -22,6 +23,7 @@ contract BOACoinBridge is ManagerAccessControl {
         withdrawTimeLock = _timeLock;
         feeManagerAddress = _feeManagerAddress;
         collectFee = _collectFee;
+        active = true;
     }
 
     event ChangeTimeLock(uint256 _timeLock);
@@ -47,6 +49,17 @@ contract BOACoinBridge is ManagerAccessControl {
 
     function getFeeManager() public view returns (address) {
         return feeManagerAddress;
+    }
+
+    event ChangeActive(bool);
+
+    function setActive(bool _value) public onlyManager {
+        active = _value;
+        emit ChangeActive(_value);
+    }
+
+    function getActive() public view returns (bool value) {
+        return active;
     }
 
     enum States {
@@ -110,7 +123,7 @@ contract BOACoinBridge is ManagerAccessControl {
         address payable _withdrawAddress,
         bytes32 _secretLock
     ) public payable onlyInvalidDepositBoxes(_boxID) {
-        require(depositBoxStates[_boxID] == States.INVALID, "Already open deposit.|ALREADY_OPEN_DEPOSIT");
+        require(active, "Swap stopped|NOT_ACTIVE");
 
         uint256 totalFee = SafeMath.add(_swapFee, _txFee);
         require(totalFee < msg.value, "Insufficient fee.|INSUFFICIENT_FEE");
