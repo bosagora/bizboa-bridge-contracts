@@ -78,33 +78,30 @@ contract BOATokenBridge is ManagerAccessControl {
     event CloseDeposit(bytes32 _boxID, bytes _secretKey);
 
     modifier onlyInvalidDepositBoxes(bytes32 _boxID) {
-        require(depositBoxStates[_boxID] == States.INVALID, "The deposit box already exists.|ALREADY_OPEN_DEPOSIT");
+        require(depositBoxStates[_boxID] == States.INVALID, "Already open deposit.|ALREADY_OPEN_DEPOSIT");
         _;
     }
 
     modifier onlyOpenDepositBoxes(bytes32 _boxID) {
-        require(depositBoxStates[_boxID] == States.OPEN, "The deposit box is not open.|NOT_OPEN_DEPOSIT");
+        require(depositBoxStates[_boxID] == States.OPEN, "Not open deposit.|NOT_OPEN_DEPOSIT");
         _;
     }
 
     modifier onlyClosedDepositBoxes(bytes32 _boxID) {
-        require(depositBoxStates[_boxID] == States.CLOSED, "The deposit box is not close.|NOT_CLOSE_DEPOSIT");
+        require(depositBoxStates[_boxID] == States.CLOSED, "Not close deposit.|NOT_CLOSE_DEPOSIT");
         _;
     }
 
     modifier onlyExpirableDepositBoxes(bytes32 _boxID) {
         require(
             depositBoxes[_boxID].timeLock + depositBoxes[_boxID].createTimestamp <= block.timestamp,
-            "The deposit box cannot be expired.|NOT_EXPIRED_DEPOSIT"
+            "Not expired deposit.|NOT_EXPIRED_DEPOSIT"
         );
         _;
     }
 
     modifier onlyWithSecretKeyDepositBoxes(bytes32 _boxID, bytes memory _secretKey) {
-        require(
-            depositBoxes[_boxID].secretLock == sha256(_secretKey),
-            "It's not the key to the deposit box.|NOT_KEY_DEPOSIT"
-        );
+        require(depositBoxes[_boxID].secretLock == sha256(_secretKey), "Not key deposit.|NOT_KEY_DEPOSIT");
         _;
     }
 
@@ -117,16 +114,16 @@ contract BOATokenBridge is ManagerAccessControl {
         bytes32 _secretLock
     ) public onlyInvalidDepositBoxes(_boxID) {
         uint256 totalFee = SafeMath.add(_swapFee, _txFee);
-        require(totalFee < _amount, "The fee is insufficient.|INSUFFICIENT_FEE");
+        require(totalFee < _amount, "Insufficient fee.|INSUFFICIENT_FEE");
 
         IERC20 token = IERC20(swapTokenAddress);
         require(
             _amount <= token.allowance(msg.sender, address(this)),
-            "The specified amount is not allowed to be transferred to the deposit box.|NOT_ALLOWED_OPEN_DEPOSIT"
+            "Not allowed open deposit.|NOT_ALLOWED_OPEN_DEPOSIT"
         );
         require(
             token.transferFrom(msg.sender, address(this), _amount),
-            "An error occurred during transfer to the deposit box.|ERROR_TRANSFER_OPEN_DEPOSIT"
+            "Error transfer open deposit.|ERROR_TRANSFER_OPEN_DEPOSIT"
         );
 
         // Store the details of the box.
@@ -171,7 +168,7 @@ contract BOATokenBridge is ManagerAccessControl {
         IERC20 token = IERC20(swapTokenAddress);
         require(
             token.transfer(box.traderAddress, box.amount),
-            "An error occurred during the refund to the user from the deposit box.|ERROR_TRANSFER_EXPIRE_DEPOSIT"
+            "Error transfer expire deposit.|ERROR_TRANSFER_EXPIRE_DEPOSIT"
         );
 
         emit ExpireDeposit(_boxID);
@@ -237,33 +234,30 @@ contract BOATokenBridge is ManagerAccessControl {
     event CloseWithdraw(bytes32 _boxID, bytes _secretKey);
 
     modifier onlyInvalidWithdrawBoxes(bytes32 _boxID) {
-        require(withdrawBoxStates[_boxID] == States.INVALID, "The withdraw box already exists.|ALREADY_OPEN_WITHDRAW");
+        require(withdrawBoxStates[_boxID] == States.INVALID, "Already open withdraw.|ALREADY_OPEN_WITHDRAW");
         _;
     }
 
     modifier onlyOpenWithdrawBoxes(bytes32 _boxID) {
-        require(withdrawBoxStates[_boxID] == States.OPEN, "The withdraw box is not open.|NOT_OPEN_WITHDRAW");
+        require(withdrawBoxStates[_boxID] == States.OPEN, "Not open withdraw.|NOT_OPEN_WITHDRAW");
         _;
     }
 
     modifier onlyClosedWithdrawBoxes(bytes32 _boxID) {
-        require(withdrawBoxStates[_boxID] == States.CLOSED, "The withdraw box is not close.|NOT_CLOSE_WITHDRAW");
+        require(withdrawBoxStates[_boxID] == States.CLOSED, "Not close withdraw.|NOT_CLOSE_WITHDRAW");
         _;
     }
 
     modifier onlyExpirableWithdrawBoxes(bytes32 _boxID) {
         require(
             withdrawBoxes[_boxID].timeLock + withdrawBoxes[_boxID].createTimestamp <= block.timestamp,
-            "The withdraw box cannot be expired.|NOT_EXPIRED_WITHDRAW"
+            "Not expired withdraw.|NOT_EXPIRED_WITHDRAW"
         );
         _;
     }
 
     modifier onlyWithSecretKeyWithdrawBoxes(bytes32 _boxID, bytes memory _secretKey) {
-        require(
-            withdrawBoxes[_boxID].secretLock == sha256(_secretKey),
-            "It's not the key to the withdraw box.|NOT_KEY_WITHDRAW"
-        );
+        require(withdrawBoxes[_boxID].secretLock == sha256(_secretKey), "Not key withdraw.|NOT_KEY_WITHDRAW");
         _;
     }
 
@@ -277,15 +271,12 @@ contract BOATokenBridge is ManagerAccessControl {
         bytes32 _secretLock
     ) public onlyManager onlyInvalidWithdrawBoxes(_boxID) {
         uint256 totalFee = SafeMath.add(_swapFee, _txFee);
-        require(totalFee < _amount, "The fee is insufficient.|INSUFFICIENT_FEE");
+        require(totalFee < _amount, "Insufficient fee.|INSUFFICIENT_FEE");
         uint256 sendAmount = SafeMath.sub(_amount, totalFee);
 
         // Transfer value from the ERC20 trader to this contract.
         IERC20 token = IERC20(swapTokenAddress);
-        require(
-            sendAmount <= token.balanceOf(address(this)),
-            "The liquidity of the withdrawal box is insufficient.|NOT_ALLOWED_OPEN_WITHDRAW"
-        );
+        require(sendAmount <= token.balanceOf(address(this)), "Insufficient liquidity.|INSUFFICIENT_LIQUIDITY");
 
         // Store the details of the box.
         WithdrawLockBox memory box = WithdrawLockBox({
@@ -324,7 +315,7 @@ contract BOATokenBridge is ManagerAccessControl {
         IERC20 token = IERC20(swapTokenAddress);
         require(
             sendAmount <= token.balanceOf(address(this)),
-            "The liquidity of the withdraw box is insufficient.|INSUFFICIENT_LIQUIDITY_CLOSE_WITHDRAW"
+            "Insufficient liquidity close withdraw.|INSUFFICIENT_LIQUIDITY_CLOSE_WITHDRAW"
         );
 
         // Close the box.
@@ -332,10 +323,7 @@ contract BOATokenBridge is ManagerAccessControl {
         withdrawBoxStates[_boxID] = States.CLOSED;
 
         // Transfer the ERC20 funds from this contract to the withdrawing trader.
-        require(
-            token.transfer(box.withdrawAddress, sendAmount),
-            "An error occurred during refund for the withdraw box.|ERROR_TRANSFER_CLOSE_WITHDRAW"
-        );
+        token.transfer(box.withdrawAddress, sendAmount);
 
         emit CloseWithdraw(_boxID, _secretKey);
     }
@@ -393,16 +381,14 @@ contract BOATokenBridge is ManagerAccessControl {
     event DecreasedLiquidity(address provider, uint256 amount);
 
     function increaseLiquidity(address _provider, uint256 _amount) public {
-        require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_INCREASE");
+        require(_amount > 0, "Invalid amount decrease.|INVALID_AMOUNT_INCREASE");
         IERC20 token = IERC20(swapTokenAddress);
         require(
             _amount <= token.allowance(_provider, address(this)),
-            "The specified amount is not allowed to be transferred to the liquidity.|NOT_ALLOWANCE_INCREASE"
+            "Not allowance increase liquidity.|NOT_ALLOWANCE_INCREASE"
         );
-        require(
-            token.transferFrom(_provider, address(this), _amount),
-            "An error occurred during transfer to the liquidity.|ERROR_TRANSFER_INCREASE"
-        );
+
+        token.transferFrom(_provider, address(this), _amount);
         uint256 liquid = liquidBalance[_provider];
         liquid = SafeMath.add(liquid, _amount);
         liquidBalance[_provider] = liquid;
@@ -410,18 +396,15 @@ contract BOATokenBridge is ManagerAccessControl {
     }
 
     function decreaseLiquidity(uint256 _amount) public {
-        require(_amount > 0, "The amount must be greater than zero.|INVALID_AMOUNT_DECREASE");
+        require(_amount > 0, "Invalid amount decrease.|INVALID_AMOUNT_DECREASE");
         uint256 liquid = liquidBalance[msg.sender];
-        require(_amount <= liquid, "The liquidity of user is insufficient.|INSUFFICIENT_BALANCE_DECREASE");
+        require(_amount <= liquid, "Insufficient user's  liquidity.|INSUFFICIENT_BALANCE_DECREASE");
         IERC20 token = IERC20(swapTokenAddress);
         require(
             _amount <= token.balanceOf(address(this)),
             "The liquidity is insufficient.|INSUFFICIENT_LIQUIDITY_DECREASE"
         );
-        require(
-            token.transfer(msg.sender, _amount),
-            "An error occurred during refund to the user from the liquidity.|ERROR_TRANSFER_DECREASE"
-        );
+        token.transfer(msg.sender, _amount);
         liquid = SafeMath.sub(liquid, _amount);
         liquidBalance[msg.sender] = liquid;
         emit DecreasedLiquidity(msg.sender, _amount);
