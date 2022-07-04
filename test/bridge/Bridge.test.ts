@@ -46,10 +46,10 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         const BOATokenBridgeFactory = await ethers.getContractFactory("BOATokenBridge");
         const TestERC20Factory = await ethers.getContractFactory("TestERC20");
 
-        token_ethnet = await TestERC20Factory.deploy("BOSAGORA Token", "BOA1");
+        token_ethnet = await TestERC20Factory.connect(admin_signer).deploy("BOSAGORA Token", "BOA1");
         await token_ethnet.deployed();
 
-        bridge_ethnet = (await BOATokenBridgeFactory.deploy(
+        bridge_ethnet = (await BOATokenBridgeFactory.connect(admin_signer).deploy(
             token_ethnet.address,
             time_lock,
             fee_manager.address,
@@ -57,8 +57,17 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
         )) as BOATokenBridge;
         await bridge_ethnet.deployed();
 
-        bridge_biznet = (await BOACoinBridgeFactory.deploy(time_lock, fee_manager.address, false)) as BOACoinBridge;
+        bridge_biznet = (await BOACoinBridgeFactory.connect(admin_signer).deploy(
+            time_lock,
+            fee_manager.address,
+            false
+        )) as BOACoinBridge;
         await bridge_biznet.deployed();
+
+        assert.strictEqual(await bridge_ethnet.owner(), admin.address);
+        assert.strictEqual(await bridge_biznet.owner(), admin.address);
+        assert.ok(!(await bridge_ethnet.isManager(admin.address)));
+        assert.ok(!(await bridge_ethnet.isManager(admin.address)));
     });
 
     before("Send liquidity", async () => {
@@ -72,6 +81,8 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
     before("Add a manager", async () => {
         await bridge_ethnet.connect(admin_signer).addManager(manager.address);
         await bridge_biznet.connect(admin_signer).addManager(manager.address);
+        assert.ok(await bridge_ethnet.isManager(manager.address));
+        assert.ok(await bridge_ethnet.isManager(manager.address));
     });
 
     context("EthNet: User -> Contract, BizNet : Contract -> User", async () => {
