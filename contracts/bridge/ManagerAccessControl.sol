@@ -11,7 +11,6 @@ contract ManagerAccessControl is AccessControl, Ownable {
     /// @dev Add `root` to the manager role as a member.
     constructor() {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(MANAGER_ROLE, _msgSender());
         _setRoleAdmin(MANAGER_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
