@@ -14,6 +14,11 @@ contract ManagerAccessControl is AccessControl, Ownable {
         _setRoleAdmin(MANAGER_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
+    /// @dev Return `true` if the `account` is owner
+    function isOwner(address account) public view virtual returns (bool) {
+        return owner() == account;
+    }
+
     /// @dev Restricted to manager.
     modifier onlyManager() {
         require(isManager(msg.sender), "Only managers can call.|NOT_MANAGER_ROLL");

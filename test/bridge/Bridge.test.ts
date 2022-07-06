@@ -66,6 +66,10 @@ describe("Cross Chain HTLC Atomic Swap with ERC20", () => {
 
         assert.strictEqual(await bridge_ethnet.owner(), admin.address);
         assert.strictEqual(await bridge_biznet.owner(), admin.address);
+        assert.ok(await bridge_ethnet.isOwner(admin.address));
+        assert.ok(await bridge_biznet.isOwner(admin.address));
+        assert.ok(!(await bridge_ethnet.isOwner(manager.address)));
+        assert.ok(!(await bridge_biznet.isOwner(manager.address)));
         assert.ok(!(await bridge_ethnet.isManager(admin.address)));
         assert.ok(!(await bridge_ethnet.isManager(admin.address)));
     });
