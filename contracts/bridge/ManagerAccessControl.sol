@@ -39,4 +39,13 @@ contract ManagerAccessControl is AccessControl, Ownable {
     function removeManager(address account) public virtual onlyOwner {
         revokeRole(MANAGER_ROLE, account);
     }
+
+    /// @dev Transfer Ownership and Role
+    function transferOwnership(address newOwner) public override virtual onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        address oldOwner = owner();
+        _transferOwnership(newOwner);
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldOwner);
+        _grantRole(DEFAULT_ADMIN_ROLE, newOwner);
+    }
 }
