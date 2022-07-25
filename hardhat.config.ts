@@ -15,6 +15,45 @@ import "solidity-coverage";
 
 dotenv.config({ path: "env/.env" });
 
+// If not defined, randomly generated.
+function createPrivateKey() {
+    const reg_bytes64: RegExp = /^(0x)[0-9a-f]{64}$/i;
+    const reg_bytes40: RegExp = /^(0x)[0-9a-f]{40}$/i;
+    if (
+        process.env.ADMIN_KEY === undefined ||
+        process.env.ADMIN_KEY.trim() === "" ||
+        !reg_bytes64.test(process.env.ADMIN_KEY)
+    ) {
+        console.log("환경 변수에 `ADMIN_KEY` 이 존재하지 않아서 무작위로 생성합니다.");
+        process.env.ADMIN_KEY = Wallet.createRandom().privateKey;
+    }
+    if (
+        process.env.MANAGER_KEY === undefined ||
+        process.env.MANAGER_KEY.trim() === "" ||
+        !reg_bytes64.test(process.env.MANAGER_KEY)
+    ) {
+        console.log("환경 변수에 `MANAGER_KEY` 이 존재하지 않아서 무작위로 생성합니다.");
+        process.env.MANAGER_KEY = Wallet.createRandom().privateKey;
+    }
+    if (
+        process.env.USER_KEY === undefined ||
+        process.env.USER_KEY.trim() === "" ||
+        !reg_bytes64.test(process.env.USER_KEY)
+    ) {
+        console.log("환경 변수에 `USER_KEY` 이 존재하지 않아서 무작위로 생성합니다.");
+        process.env.USER_KEY = Wallet.createRandom().privateKey;
+    }
+    if (
+        process.env.FEE_MANAGER_ADDRESS === undefined ||
+        process.env.FEE_MANAGER_ADDRESS.trim() === "" ||
+        !reg_bytes40.test(process.env.FEE_MANAGER_ADDRESS)
+    ) {
+        console.log("환경 변수에 `FEE_MANAGER_ADDRESS` 이 존재하지 않아서 무작위로 생성합니다.");
+        process.env.FEE_MANAGER_ADDRESS = Wallet.createRandom().address;
+    }
+}
+createPrivateKey();
+
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
 task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
@@ -26,6 +65,15 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 });
 
 function getAccounts() {
+    const accounts = [process.env.ADMIN_KEY || "", process.env.MANAGER_KEY || "", process.env.USER_KEY || ""];
+    const n = 10;
+    for (let i = 2; i < n; ++i) {
+        accounts.push(Wallet.createRandom().privateKey);
+    }
+    return accounts;
+}
+
+function getTestAccounts() {
     const accounts: HardhatNetworkAccountUserConfig[] = [];
     const defaultBalance = utils.parseEther("2000000").toString();
 
@@ -36,15 +84,6 @@ function getAccounts() {
             balance: defaultBalance,
         });
     }
-    accounts[0].privateKey =
-        process.env.ADMIN_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-    accounts[1].privateKey =
-        process.env.MANAGER_KEY || "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
-    accounts[2].privateKey =
-        process.env.USER_KEY || "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
-    accounts[3].privateKey =
-        process.env.FEE_MANAGER_KEY || "bdc8808cb44151d6cf9814c728e9584c34fffc0344ab0c1d0b7c434cb7b54b7b";
-
     return accounts;
 }
 
@@ -55,31 +94,25 @@ const config: HardhatUserConfig = {
     solidity: {
         compilers: [
             {
-                version: "0.4.24",
-            },
-            {
-                version: "0.5.0",
-            },
-            {
                 version: "0.8.0",
             },
         ],
     },
     networks: {
         hardhat: {
-            accounts: getAccounts(),
+            accounts: getTestAccounts(),
         },
         ropsten: {
             url: process.env.ROPSTEN_URL || "",
             chainId: 3,
-            accounts: [process.env.ADMIN_KEY || "", process.env.MANAGER_KEY || "", process.env.USER_KEY || ""],
+            accounts: getAccounts(),
             gas: 2100000,
             gasPrice: 8000000000,
         },
         rinkeby: {
             url: process.env.RINKEBY_URL || "",
             chainId: 4,
-            accounts: [process.env.ADMIN_KEY || "", process.env.MANAGER_KEY || "", process.env.USER_KEY || ""],
+            accounts: getAccounts(),
             gas: 2100000,
             gasPrice: 8000000000,
         },
