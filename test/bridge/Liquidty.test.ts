@@ -135,7 +135,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity - BOATokenBridge", () 
         });
     });
 });
-/*
+
 describe("Test of Increase Liquidity & Decrease Liquidity - BOACoinBridge", () => {
     let bridge_contract: BOACoinBridge;
 
@@ -246,4 +246,3 @@ describe("Test of Increase Liquidity & Decrease Liquidity - BOACoinBridge", () =
         });
     });
 });
-*/
