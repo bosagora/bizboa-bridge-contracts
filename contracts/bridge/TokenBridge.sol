@@ -37,10 +37,12 @@ contract TokenBridge is ManagerAccessControl {
 
     uint256 public depositTimeLock;
     uint256 public withdrawTimeLock;
+    bool public active;
 
     constructor(uint256 _timeLock) {
         depositTimeLock = _timeLock * 2;
         withdrawTimeLock = _timeLock;
+        active = true;
     }
 
     /// @notice Information about registered tokens
@@ -72,6 +74,13 @@ contract TokenBridge is ManagerAccessControl {
         depositTimeLock = _timeLock * 2;
         withdrawTimeLock = _timeLock;
         emit ChangeTimeLock(depositTimeLock);
+    }
+
+    event ChangeActive(bool);
+
+    function setActive(bool _value) public onlyManager {
+        active = _value;
+        emit ChangeActive(_value);
     }
 
     enum States {
@@ -132,6 +141,7 @@ contract TokenBridge is ManagerAccessControl {
         address _withdrawAddress,
         bytes32 _secretLock
     ) public onlyInvalidDepositBoxes(_boxID) {
+        require(active, "E004");
         require(_withdrawAddress != address(0), "E003");
 
         IERC20 token = tokens[_tokenId].token;
