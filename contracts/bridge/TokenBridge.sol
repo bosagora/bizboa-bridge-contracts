@@ -423,4 +423,9 @@ contract TokenBridge is ManagerAccessControl {
         require(tokens[_tokenId].status == TokenStatus.Registered);
         return tokens[_tokenId].liquidBalance[_provider];
     }
+
+    /// @notice Withdraw transaction fees to the manager's account
+    function withdrawTxFee() public onlyManager {
+        payable(msg.sender).transfer(address(this).balance);
+    }
 }
