@@ -94,6 +94,7 @@ contract TokenBridge is ManagerAccessControl {
         bytes32 tokenId;
         uint256 timeLock;
         uint256 amount;
+        uint256 txFee;
         address traderAddress;
         address withdrawAddress;
         bytes32 secretLock;
@@ -140,9 +141,10 @@ contract TokenBridge is ManagerAccessControl {
         uint256 _amount,
         address _withdrawAddress,
         bytes32 _secretLock
-    ) public onlyInvalidDepositBoxes(_boxID) {
+    ) public payable onlyInvalidDepositBoxes(_boxID) {
         require(active, "E004");
         require(_withdrawAddress != address(0), "E003");
+        require(msg.value > 0, "E003");
 
         IERC20 token = tokens[_tokenId].token;
 
@@ -155,6 +157,7 @@ contract TokenBridge is ManagerAccessControl {
             tokenId: _tokenId,
             timeLock: depositTimeLock,
             amount: _amount,
+            txFee: msg.value,
             traderAddress: msg.sender,
             withdrawAddress: _withdrawAddress,
             secretLock: _secretLock,
@@ -198,6 +201,7 @@ contract TokenBridge is ManagerAccessControl {
             bytes32 tokenId,
             uint256 timeLock,
             uint256 amount,
+            uint256 txFee,
             address traderAddress,
             address withdrawAddress,
             bytes32 secretLock,
@@ -211,6 +215,7 @@ contract TokenBridge is ManagerAccessControl {
             box.tokenId,
             box.timeLock,
             box.amount,
+            box.txFee,
             box.traderAddress,
             box.withdrawAddress,
             box.secretLock,

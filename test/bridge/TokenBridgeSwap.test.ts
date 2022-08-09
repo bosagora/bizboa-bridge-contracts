@@ -28,6 +28,7 @@ describe("Test Swap of TokenBridge", () => {
     const liquidity_amount = Amount.make(1000000, decimal);
     const swap_amount = Amount.make(10000, decimal);
     const time_lock = 60 * 60 * 24;
+    let txFee = Amount.make(1, 18);
 
     let token_id_ethnet: string;
     let token_id_biznet: string;
@@ -91,6 +92,9 @@ describe("Test Swap of TokenBridge", () => {
         let old_bridge_ethnet_balance: BigNumber;
         let old_bridge_biznet_balance: BigNumber;
 
+        // transaction fee (ETH)
+        txFee = Amount.make(0.01, 18);
+
         before("Distribute the fund", async () => {
             await token_ethnet.connect(admin_signer).transfer(user_eth.address, swap_amount.value);
         });
@@ -115,7 +119,9 @@ describe("Test Swap of TokenBridge", () => {
             expect(
                 await bridge_ethnet
                     .connect(user_eth_signer)
-                    .openDeposit(token_id_ethnet, lock_box_id, swap_amount.value, user_biz.address, lock)
+                    .openDeposit(token_id_ethnet, lock_box_id, swap_amount.value, user_biz.address, lock, {
+                        value: txFee.value,
+                    })
             ).to.emit(bridge_ethnet, "OpenDeposit");
         });
 
@@ -124,9 +130,10 @@ describe("Test Swap of TokenBridge", () => {
             assert.strictEqual(result[0].toString(), "1");
             assert.strictEqual(result[1].toString(), token_id_ethnet);
             assert.strictEqual(result[3].toString(), swap_amount.toString());
-            assert.strictEqual(result[4].toString(), user_eth.address);
-            assert.strictEqual(result[5].toString(), user_biz.address);
-            assert.strictEqual(result[6].toString(), lock);
+            assert.strictEqual(result[4].toString(), txFee.toString());
+            assert.strictEqual(result[5].toString(), user_eth.address);
+            assert.strictEqual(result[6].toString(), user_biz.address);
+            assert.strictEqual(result[7].toString(), lock);
         });
 
         it("Open the lock box in BizNet by Manager", async () => {
@@ -197,6 +204,9 @@ describe("Test Swap of TokenBridge", () => {
         let old_bridge_ethnet_balance: BigNumber;
         let old_bridge_biznet_balance: BigNumber;
 
+        // transaction fee (BOA)
+        txFee = Amount.make(300, 18);
+
         before("Distribute the fund", async () => {
             // await token_biznet.connect(admin_signer).transfer(user.address, swap_amount_token);
         });
@@ -221,7 +231,9 @@ describe("Test Swap of TokenBridge", () => {
             expect(
                 await bridge_biznet
                     .connect(user_biz_signer)
-                    .openDeposit(token_id_biznet, lock_box_id, swap_amount.value, user_eth.address, lock)
+                    .openDeposit(token_id_biznet, lock_box_id, swap_amount.value, user_eth.address, lock, {
+                        value: txFee.value,
+                    })
             ).to.emit(bridge_biznet, "OpenDeposit");
         });
 
@@ -230,9 +242,10 @@ describe("Test Swap of TokenBridge", () => {
             assert.strictEqual(result[0].toString(), "1");
             assert.strictEqual(result[1].toString(), token_id_biznet);
             assert.strictEqual(result[3].toString(), swap_amount.toString());
-            assert.strictEqual(result[4].toString(), user_biz.address);
-            assert.strictEqual(result[5].toString(), user_eth.address);
-            assert.strictEqual(result[6].toString(), lock);
+            assert.strictEqual(result[4].toString(), txFee.toString());
+            assert.strictEqual(result[5].toString(), user_biz.address);
+            assert.strictEqual(result[6].toString(), user_eth.address);
+            assert.strictEqual(result[7].toString(), lock);
         });
 
         it("Open the lock box in EthNet by Manager", async () => {
@@ -289,6 +302,9 @@ describe("Test Swap of TokenBridge", () => {
     });
 
     context("Test the stop function of the swap", async () => {
+        // transaction fee
+        txFee = Amount.make(300, 18);
+
         it("Create key by User", async () => {
             const key_buffer = ContractUtils.createKey();
             const lock_buffer = ContractUtils.sha256(key_buffer);
@@ -307,7 +323,9 @@ describe("Test Swap of TokenBridge", () => {
             await expect(
                 bridge_ethnet
                     .connect(user_eth_signer)
-                    .openDeposit(token_id_ethnet, lock_box_id, swap_amount.value, user_biz.address, lock)
+                    .openDeposit(token_id_ethnet, lock_box_id, swap_amount.value, user_biz.address, lock, {
+                        value: txFee.value,
+                    })
             ).to.be.reverted;
         });
 
@@ -326,7 +344,9 @@ describe("Test Swap of TokenBridge", () => {
             await expect(
                 bridge_biznet
                     .connect(user_biz_signer)
-                    .openDeposit(token_id_biznet, lock_box_id, swap_amount.value, user_eth.address, lock)
+                    .openDeposit(token_id_biznet, lock_box_id, swap_amount.value, user_eth.address, lock, {
+                        value: txFee.value,
+                    })
             ).to.be.reverted;
         });
 
@@ -354,7 +374,9 @@ describe("Test Swap of TokenBridge", () => {
             await token_ethnet.connect(user_eth_signer).approve(bridge_ethnet.address, swap_amount.value);
             await bridge_ethnet
                 .connect(user_eth_signer)
-                .openDeposit(token_id_ethnet, lockBox_expiry, swap_amount.value, user_biz.address, lock);
+                .openDeposit(token_id_ethnet, lockBox_expiry, swap_amount.value, user_biz.address, lock, {
+                    value: txFee.value,
+                });
         });
 
         it("No Expiry", async () => {
