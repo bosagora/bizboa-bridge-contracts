@@ -29,7 +29,7 @@ describe("Test for Token Bridge", () => {
         token2 = await TestTokenFactory.connect(admin_signer).deploy("Token1", "TNB", 10);
         await token2.deployed();
 
-        bridge = (await TokenBridgeFactory.connect(admin_signer).deploy()) as TokenBridge;
+        bridge = (await TokenBridgeFactory.connect(admin_signer).deploy(60)) as TokenBridge;
         await bridge.deployed();
 
         assert.strictEqual(await bridge.owner(), admin.address);
