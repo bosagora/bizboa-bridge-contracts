@@ -12,7 +12,8 @@
     "build": "node_modules/.bin/hardhat compile",
     "test:Bridge": "NODE_ENV=test node_modules/.bin/hardhat test test/bridge/Bridge.test.ts",
     "test:BridgeLiquidity": "NODE_ENV=test node_modules/.bin/hardhat test test/bridge/Liquidty.test.ts",
-    "test:BridgeToken": "NODE_ENV=test node_modules/.bin/hardhat test test/bridge/TokenBridge.test.ts"
+    "test:BridgeToken": "NODE_ENV=test node_modules/.bin/hardhat test test/bridge/TokenBridge.test.ts",
+    "test:BridgeTokenSwap": "NODE_ENV=test node_modules/.bin/hardhat test test/bridge/TokenBridgeSwap.test.ts"
   },
   "repository": {
     "type": "git",
