@@ -25,6 +25,7 @@ contract TokenBridge is ManagerAccessControl {
         ERC20 token;
         address tokenAddress;
         TokenStatus status;
+        mapping(address => uint256) liquidBalance;
     }
 
     /// @notice Information about registered tokens
@@ -365,5 +366,48 @@ contract TokenBridge is ManagerAccessControl {
     {
         WithdrawLockBox memory box = withdrawBoxes[_boxID];
         return box.secretKey;
+    }
+
+    event IncreasedLiquidity(bytes32 tokenId, address provider, uint256 amount);
+    event DecreasedLiquidity(bytes32 tokenId, address provider, uint256 amount);
+
+    /// @notice Increase liquidity
+    function increaseLiquidity(
+        bytes32 _tokenId,
+        uint256 _amount
+    ) public onlyRegisteredToken(_tokenId) {
+        require(_amount > 0, "E003");
+
+        ERC20 token = tokens[_tokenId].token;
+        require(_amount <= token.allowance(msg.sender, address(this)), "E005");
+
+        token.transferFrom(msg.sender, address(this), _amount);
+        uint256 liquid = tokens[_tokenId].liquidBalance[msg.sender];
+        tokens[_tokenId].liquidBalance[msg.sender] = liquid + _amount;
+        emit IncreasedLiquidity(_tokenId, msg.sender, _amount);
+    }
+
+    /// @notice Decrease liquidity
+    function decreaseLiquidity(bytes32 _tokenId, uint256 _amount) public onlyRegisteredToken(_tokenId) {
+        require(_amount > 0, "E003");
+
+        ERC20 token = tokens[_tokenId].token;
+
+        uint256 liquid = tokens[_tokenId].liquidBalance[msg.sender];
+        require(_amount <= liquid, "E005");
+        require(_amount <= token.balanceOf(address(this)), "E005");
+        tokens[_tokenId].liquidBalance[msg.sender] = liquid - _amount;
+        token.transfer(msg.sender, _amount);
+        emit DecreasedLiquidity(_tokenId, msg.sender, _amount);
+    }
+
+    /// @notice Returns the balance of liquidity for _provider
+    function balanceOfLiquidity(bytes32 _tokenId, address _provider)
+        public
+        view
+        onlyRegisteredToken(_tokenId)
+        returns (uint256 amount)
+    {
+        return tokens[_tokenId].liquidBalance[_provider];
     }
 }
