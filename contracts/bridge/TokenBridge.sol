@@ -99,6 +99,7 @@ contract TokenBridge is ManagerAccessControl {
         bytes32 tokenId;
         uint256 timeLock;
         uint256 amount;
+        uint256 txFee;
         address traderAddress;
         address withdrawAddress;
         bytes32 secretLock;
@@ -139,16 +140,21 @@ contract TokenBridge is ManagerAccessControl {
     }
 
     /// @notice Open the deposit lock box
+    /// @notice Declared payable to receive the fee as a native token
     function openDeposit(
         bytes32 _tokenId,
         bytes32 _boxID,
         uint256 _amount,
         address _withdrawAddress,
         bytes32 _secretLock
-    ) public onlyInvalidDepositBoxes(_boxID) onlyRegisteredToken(_tokenId) {
+    ) public payable onlyInvalidDepositBoxes(_boxID) onlyRegisteredToken(_tokenId) {
         // Check if the exchange  is activated.
         require(active, "E004");
         require(_withdrawAddress != address(0), "E003");
+
+        // Check if the fee has been sent.
+        // If it is not an appropriate fee, the exchange will not take place.
+        require(msg.value > 1000000000, "E003");
 
         ERC20 token = tokens[_tokenId].token;
 
@@ -160,6 +166,7 @@ contract TokenBridge is ManagerAccessControl {
             tokenId: _tokenId,
             timeLock: depositTimeLock,
             amount: _amount,
+            txFee: msg.value,
             traderAddress: msg.sender,
             withdrawAddress: _withdrawAddress,
             secretLock: _secretLock,
@@ -203,6 +210,7 @@ contract TokenBridge is ManagerAccessControl {
             bytes32 tokenId,
             uint256 timeLock,
             uint256 amount,
+            uint256 txFee,
             address traderAddress,
             address withdrawAddress,
             bytes32 secretLock,
@@ -216,6 +224,7 @@ contract TokenBridge is ManagerAccessControl {
             box.tokenId,
             box.timeLock,
             box.amount,
+            box.txFee,
             box.traderAddress,
             box.withdrawAddress,
             box.secretLock,
