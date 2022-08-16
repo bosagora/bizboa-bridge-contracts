@@ -196,6 +196,25 @@ describe("Test Swap of TokenBridge", () => {
                     .openWithdraw(token_id_ethnet, box_id, swap_amount.value, user_eth.address, user_biz.address, lock)
             );
         });
+
+        it("Management the transaction fees", async () => {
+            const bridge_balance_before_withdraw = await provider.getBalance(bridge_ethnet.address);
+            assert.strictEqual(bridge_balance_before_withdraw.toString(), txFee.toString());
+
+            const manager_balance_before_withdraw = await provider.getBalance(manager.address);
+            const tx = await bridge_ethnet.connect(manager_signer).withdrawTxFee();
+            const res = await tx.wait();
+            const txFeeUsed = res.gasUsed.mul(res.effectiveGasPrice);
+            const manager_balance_after_withdraw = await provider.getBalance(manager.address);
+
+            const bridge_balance_after_withdraw = await provider.getBalance(bridge_ethnet.address);
+            assert.strictEqual(bridge_balance_after_withdraw.toString(), "0");
+
+            assert.strictEqual(
+                manager_balance_after_withdraw.sub(manager_balance_before_withdraw).add(txFeeUsed).toString(),
+                txFee.toString()
+            );
+        });
     });
 
     context("BizNet: User -> Contract, EthNet : Contract -> User", async () => {
