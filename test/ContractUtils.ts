@@ -29,6 +29,21 @@ export class ContractUtils {
     }
 
     /**
+     * It generates hash values.
+     * @param address
+     * @param name
+     * @param symbol
+     */
+    public static getTokenId(address: string, name: string, symbol: string): Buffer {
+        return crypto
+            .createHash("sha256")
+            .update(ContractUtils.StringToBuffer(address))
+            .update(Buffer.from(name))
+            .update(Buffer.from(symbol))
+            .digest();
+    }
+
+    /**
      * Convert hexadecimal strings into Buffer.
      * @param hex The hexadecimal string
      */
