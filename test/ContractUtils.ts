@@ -34,12 +34,11 @@ export class ContractUtils {
      * @param name
      * @param symbol
      */
-    public static getTokenId(address: string, name: string, symbol: string): Buffer {
+    public static getTokenId(address: string, tokenAddress: string): Buffer {
         return crypto
             .createHash("sha256")
             .update(ContractUtils.StringToBuffer(address))
-            .update(Buffer.from(name))
-            .update(Buffer.from(symbol))
+            .update(ContractUtils.StringToBuffer(tokenAddress))
             .digest();
     }
 

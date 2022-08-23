@@ -42,7 +42,7 @@ describe("Test for Token Bridge", () => {
     });
 
     it("Register a token", async () => {
-        const tokenId1 = ContractUtils.getTokenId(bridge.address, await token1.name(), await token1.symbol());
+        const tokenId1 = ContractUtils.getTokenId(bridge.address, token1.address);
         // Only the manager can call.
         await expect(bridge.connect(other_signer).registerToken(tokenId1, token1.address)).to.be.reverted;
 
@@ -54,7 +54,7 @@ describe("Test for Token Bridge", () => {
         // The same token cannot be registered more than once.
         await expect(bridge.connect(manager_signer).registerToken(tokenId1, token1.address)).to.be.reverted;
 
-        const tokenId2 = ContractUtils.getTokenId(bridge.address, await token2.name(), await token2.symbol());
+        const tokenId2 = ContractUtils.getTokenId(bridge.address, token2.address);
         expect(await bridge.connect(manager_signer).registerToken(tokenId2, token2.address)).to.emit(
             bridge,
             "TokenRegistered"
