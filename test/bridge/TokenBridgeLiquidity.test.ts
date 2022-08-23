@@ -47,8 +47,7 @@ describe("Test of Increase Liquidity & Decrease Liquidity - TokenBridge", () => 
         token_id = ContractUtils.BufferToString(
             ContractUtils.getTokenId(
                 bridge_contract.address,
-                await token_contract.name(),
-                await token_contract.symbol()
+                token_contract.address
             )
         );
         expect(await bridge_contract.connect(manager_signer).registerToken(token_id, token_contract.address)).to.emit(

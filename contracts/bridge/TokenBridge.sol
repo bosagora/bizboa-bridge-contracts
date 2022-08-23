@@ -53,7 +53,7 @@ contract TokenBridge is ManagerAccessControl {
         ERC20 token = ERC20(_tokenAddress);
 
         // Generate a token ID
-        bytes32 tokenId = sha256(abi.encodePacked(address(this), token.name(), token.symbol()));
+        bytes32 tokenId = sha256(abi.encodePacked(address(this), address(_tokenAddress)));
 
         require(tokenId == _tokenId);
 

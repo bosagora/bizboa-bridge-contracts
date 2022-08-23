@@ -67,14 +67,14 @@ describe("Test Swap of TokenBridge", () => {
 
     before("Register a token", async () => {
         token_id_ethnet = ContractUtils.BufferToString(
-            ContractUtils.getTokenId(bridge_ethnet.address, await token_ethnet.name(), await token_ethnet.symbol())
+            ContractUtils.getTokenId(bridge_ethnet.address, token_ethnet.address)
         );
         expect(
             await bridge_ethnet.connect(manager_signer).registerToken(token_id_ethnet, token_ethnet.address)
         ).to.emit(bridge_ethnet, "TokenRegistered");
 
         token_id_biznet = ContractUtils.BufferToString(
-            ContractUtils.getTokenId(bridge_biznet.address, await token_biznet.name(), await token_biznet.symbol())
+            ContractUtils.getTokenId(bridge_biznet.address, token_biznet.address)
         );
         expect(
             await bridge_biznet.connect(manager_signer).registerToken(token_id_biznet, token_biznet.address)
